@@ -1,4 +1,5 @@
-import { IconBell, IconChevronDown } from "./icons";
+import { Link } from "react-router-dom";
+import { IconBell, IconChevronDown, IconPlus } from "./icons";
 import { ORG_NAME, USER_INITIALS } from "../data";
 
 export function Topbar({ title }: { title: string }) {
@@ -6,6 +7,11 @@ export function Topbar({ title }: { title: string }) {
     <header className="topbar">
       <div className="topbar__title">{title}</div>
       <div className="topbar__spacer" />
+
+      <Link to="/capture" className="primary-btn">
+        <IconPlus />
+        New inspection
+      </Link>
 
       <button className="org-switcher">
         {ORG_NAME}

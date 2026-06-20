@@ -726,3 +726,330 @@ button {
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================================
+   Primary button (shared: topbar + capture)
+   ============================================================ */
+
+.primary-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-16);
+  border-radius: var(--radius-sm);
+  background: var(--brand);
+  color: var(--text-invert);
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.12s ease;
+}
+
+.primary-btn:hover {
+  background: var(--brand-strong);
+}
+
+.primary-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* ============================================================
+   Mobile capture flow (phone-first, large touch targets)
+   ============================================================ */
+
+.capture {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  max-width: 520px;
+  margin: 0 auto;
+  background: var(--bg);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+.capture__top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  height: 56px;
+  padding: 0 var(--space-12);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 4;
+}
+
+.capture__title {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+
+.capture__step {
+  margin-left: auto;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.stepper {
+  display: flex;
+  gap: var(--space-6);
+  padding: var(--space-12) var(--space-16);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.stepper__seg {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-active);
+  transition: background 0.2s ease;
+}
+
+.stepper__seg.is-active {
+  background: var(--brand);
+}
+
+.stepper__seg.is-done {
+  background: var(--clear);
+}
+
+/* Camera stage */
+.capture__stage {
+  position: relative;
+  flex: 1;
+  min-height: 58vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: oklch(0.2 0.012 262);
+}
+
+.capture__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.capture__overlay {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  padding: var(--space-24);
+  pointer-events: none;
+}
+
+.angle-diagram {
+  width: 116px;
+  height: auto;
+  filter: drop-shadow(0 2px 8px oklch(0 0 0 / 0.4));
+}
+
+.capture__hint {
+  margin: var(--space-12) auto 0;
+  max-width: 320px;
+  color: oklch(0.99 0 0);
+  font-weight: 500;
+  font-size: 14px;
+  text-shadow: 0 1px 6px oklch(0 0 0 / 0.6);
+}
+
+.capture__controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-20) var(--space-16) var(--space-24);
+  background: linear-gradient(
+    to top,
+    oklch(0 0 0 / 0.55),
+    oklch(0 0 0 / 0)
+  );
+}
+
+.capture__controls-label {
+  margin: 0;
+  color: oklch(0.99 0 0);
+  font-size: 13px;
+  font-weight: 500;
+  text-shadow: 0 1px 6px oklch(0 0 0 / 0.6);
+}
+
+.record-btn {
+  width: 74px;
+  height: 74px;
+  border-radius: 999px;
+  background: var(--crit);
+  border: 4px solid oklch(0.99 0 0);
+  box-shadow: 0 4px 16px oklch(0 0 0 / 0.4);
+  display: grid;
+  place-items: center;
+  transition: border-radius 0.2s ease, transform 0.1s ease;
+}
+
+.record-btn:active {
+  transform: scale(0.96);
+}
+
+.record-btn:disabled {
+  opacity: 0.5;
+}
+
+.record-btn.is-recording {
+  border-radius: 22px;
+}
+
+.record-btn__count {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 22px;
+  color: oklch(0.99 0 0);
+}
+
+.cam-fallback {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  color: oklch(0.99 0 0);
+  padding: var(--space-32);
+}
+
+.cam-fallback .muted {
+  color: oklch(0.8 0.01 262);
+}
+
+/* Upload bar */
+.upload-bar {
+  padding: var(--space-12) var(--space-16);
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.upload-bar__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  font-size: 13px;
+  color: var(--text-2);
+  margin-bottom: var(--space-8);
+}
+
+.upload-bar__track {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-active);
+  overflow: hidden;
+}
+
+.upload-bar__fill {
+  height: 100%;
+  background: var(--brand);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+
+/* Select + done panels */
+.capture-panel {
+  flex: 1;
+  padding: var(--space-16);
+}
+
+.select-card,
+.done-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-24);
+}
+
+.select-card__title {
+  margin: 0 0 var(--space-8);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.field-label {
+  display: block;
+  margin: var(--space-20) 0 var(--space-8);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.select {
+  width: 100%;
+  padding: var(--space-12);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.btn-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  margin-top: var(--space-20);
+}
+
+.text-btn {
+  color: var(--text-2);
+  font-weight: 600;
+  font-size: 13px;
+  text-decoration: none;
+  padding: var(--space-8) var(--space-4);
+}
+
+.text-btn:hover {
+  color: var(--text);
+}
+
+.error-note {
+  color: var(--crit);
+  font-size: 13px;
+  margin: var(--space-12) 0 0;
+}
+
+.api-down code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--surface-active);
+  padding: 2px 6px;
+  border-radius: 5px;
+}
+
+.api-down .primary-btn {
+  margin-top: var(--space-16);
+}
+
+.done-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--clear-bg);
+  color: var(--clear);
+  margin-bottom: var(--space-16);
+}
+
+.muted {
+  color: var(--text-3);
+}

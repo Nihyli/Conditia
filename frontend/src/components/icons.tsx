@@ -129,6 +129,47 @@ export const IconFilter = (p: IconProps) => (
   </svg>
 );
 
+export const IconPlus = (p: IconProps) => (
+  <svg {...base({ size: 16, ...p })}>
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+);
+
+export const IconCamera = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2l1.2-2h6.6L16.5 7h2A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5z" />
+    <circle cx="12" cy="13" r="3.4" />
+  </svg>
+);
+
+export const IconCheck = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M5 12.5l4.5 4.5L19 7.5" />
+  </svg>
+);
+
+export const IconArrowLeft = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M19 12H5" />
+    <path d="M11 18l-6-6 6-6" />
+  </svg>
+);
+
+export const IconRefresh = (p: IconProps) => (
+  <svg {...base(p)}>
+    <path d="M20 11a8 8 0 0 0-14-4.5L4 8" />
+    <path d="M4 4v4h4" />
+    <path d="M4 13a8 8 0 0 0 14 4.5L20 16" />
+    <path d="M20 20v-4h-4" />
+  </svg>
+);
+
+export const IconStop = (p: IconProps) => (
+  <svg {...base(p)}>
+    <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 export const navIconMap = {
   overview: IconOverview,
   truck: IconTruck,

@@ -1,7 +1,6 @@
 export interface Inspection {
   id: string;
   truckId: string;
-  /** Human-readable truck id (license plate or VIN). */
   truckLabel: string;
   make: string;
   model: string;
@@ -10,6 +9,15 @@ export interface Inspection {
   source: CaptureSource;
   status: "complete" | "processing" | "pending" | "failed";
   findings: Finding[];
+  media: InspectionMedia[];
+}
+
+export interface InspectionMedia {
+  id: string;
+  mediaType: "photo" | "video";
+  captureAngle: string | null;
+  storagePath: string;
+  capturedAt: string;
 }
 
 export type Severity = "critical" | "medium" | "low" | "clear";

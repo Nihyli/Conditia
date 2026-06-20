@@ -12,6 +12,11 @@ from routers import findings, fleet, inspections, reports, trucks
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    print("=" * 50)
+    print("Conditia API v0.2.0")
+    print(f"  storage: {settings.storage_dir}")
+    print(f"  database: {settings.database_url}")
+    print("=" * 50)
     await init_db()
     if settings.seed_on_startup:
         from seed import seed_if_empty
@@ -51,7 +56,10 @@ app.include_router(reports.router)
 async def health():
     return {
         "status": "ok",
+        "version": "0.2.0",
+        "features": ["inspection_media", "media_sync", "fleet_stats"],
         "database": settings.database_url.split("://", 1)[0],
+        "storage_dir": settings.storage_dir,
         "vision": "google" if settings.google_vision_enabled else "stub",
     }
 

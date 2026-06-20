@@ -1,5 +1,6 @@
 import type { DamageZone, Finding, Inspection, Severity } from "../types";
 import { IconDownload } from "./icons";
+import { InspectionMediaViewer } from "./InspectionMediaViewer";
 
 const sevColor: Record<Severity, string> = {
   critical: "var(--crit)",
@@ -172,10 +173,15 @@ export function DamageMap({ inspection }: { inspection: Inspection }) {
 
       <div className="dmap__sub">
         <span className="dmap__model">
-          {inspection.make} {inspection.model}
+          {[inspection.make, inspection.model].filter(Boolean).join(" ") ||
+            inspection.truckLabel}
         </span>
-        <span className="dmap__when">Inspected {inspection.capturedAtLabel.replace(/^.*,\s*/, "")}</span>
+        <span className="dmap__when">
+          {inspection.capturedAtLabel} · {inspection.relativeLabel}
+        </span>
       </div>
+
+      <InspectionMediaViewer key={inspection.id} media={inspection.media} />
 
       <div className="dmap__stage">
         <TruckSilhouette findings={inspection.findings} />
@@ -194,8 +200,9 @@ export function DamageMap({ inspection }: { inspection: Inspection }) {
       <div className="findings">
         {sorted.length === 0 ? (
           <div className="empty">
-            <div className="empty__title">No findings</div>
-            This inspection came back clear.
+            <div className="empty__title">No findings yet</div>
+            Analysis has not detected damage on this inspection, or processing
+            is still running. Review the captured media above.
           </div>
         ) : (
           sorted.map((f) => (

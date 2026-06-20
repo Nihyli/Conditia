@@ -52,10 +52,12 @@ export function RecentInspections({
               onClick={() => onSelect(insp.id)}
             >
               <span className="insp-row__id">{insp.truckLabel}</span>
-              <span>
-                <span className="insp-row__truck">
-                  {insp.make} {insp.model}
-                </span>
+              <span className="insp-row__meta">
+                {(insp.make || insp.model) && (
+                  <span className="insp-row__truck">
+                    {[insp.make, insp.model].filter(Boolean).join(" ")}
+                  </span>
+                )}
                 <span className="insp-row__time">
                   {insp.capturedAtLabel} · {insp.relativeLabel}
                 </span>

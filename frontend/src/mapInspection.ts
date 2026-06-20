@@ -2,6 +2,7 @@ import type {
   ApiFinding,
   ApiFleetStats,
   ApiInspectionSummary,
+  ApiMedia,
 } from "./api";
 import { formatCapturedAt } from "./formatTime";
 import type {
@@ -48,6 +49,16 @@ function mapFinding(f: ApiFinding): Finding {
   };
 }
 
+function mapMedia(m: ApiMedia) {
+  return {
+    id: m.id,
+    mediaType: m.media_type,
+    captureAngle: m.capture_angle,
+    storagePath: m.storage_path,
+    capturedAt: m.captured_at,
+  };
+}
+
 export function mapInspectionSummary(row: ApiInspectionSummary): Inspection {
   const { capturedAtLabel, relativeLabel } = formatCapturedAt(row.started_at);
   return {
@@ -61,6 +72,7 @@ export function mapInspectionSummary(row: ApiInspectionSummary): Inspection {
     source: row.capture_source as CaptureSource,
     status: row.status as Inspection["status"],
     findings: row.findings.map(mapFinding),
+    media: (row.media ?? []).map(mapMedia),
   };
 }
 

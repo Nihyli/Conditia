@@ -481,6 +481,13 @@ button {
   color: var(--text-2);
 }
 
+.insp-row__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .insp-row.is-active .insp-row__id {
   color: var(--brand-strong);
 }
@@ -538,6 +545,95 @@ button {
   font-size: 12px;
   color: var(--text-3);
   margin: var(--space-4) 0 0;
+}
+
+/* ---------- Captured media viewer ---------- */
+
+.media-viewer {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: var(--space-16) var(--space-20);
+  background: var(--surface-2);
+}
+
+.media-viewer__status {
+  margin: 0;
+  font-size: 13px;
+}
+
+.media-viewer__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-12);
+  margin-bottom: var(--space-12);
+}
+
+.media-viewer__title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.media-viewer__stage {
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: oklch(0.2 0.012 262);
+  border: 1px solid var(--border);
+}
+
+.media-viewer__player {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  background: oklch(0.16 0.01 262);
+}
+
+.media-viewer__thumbs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--space-8);
+  margin-top: var(--space-12);
+}
+
+.media-thumb {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 0;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--surface);
+  text-align: left;
+  transition: border-color 0.12s ease;
+}
+
+.media-thumb:hover {
+  border-color: var(--border-strong);
+}
+
+.media-thumb.is-active {
+  border-color: var(--brand);
+}
+
+.media-thumb__img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  display: block;
+  background: oklch(0.2 0.012 262);
+}
+
+.media-thumb__label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: var(--text-2);
+  padding: 0 var(--space-6) var(--space-6);
+  line-height: 1.2;
 }
 
 .legend {

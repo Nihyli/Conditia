@@ -19,10 +19,12 @@ from models.schemas import (
     InspectionCreate,
     InspectionOut,
     InspectionSummary,
+    MediaOut,
     UploadResult,
 )
 from services.analysis import analyze_inspection
 from services.inspection_history import inspections_since_first_seen
+from services.media_sync import get_inspection_media_rows, sync_inspection_media_from_disk
 from utils import worst_severity
 
 router = APIRouter(prefix="/inspections", tags=["inspections"])
@@ -50,6 +52,21 @@ async def _build_summary(db: AsyncSession, inspection: Inspection) -> Inspection
     )
     findings = result.scalars().all()
 
+    media_result = await db.execute(
+        select(InspectionMedia)
+        .where(InspectionMedia.inspection_id == inspection.id)
+        .order_by(InspectionMedia.captured_at.asc())
+    )
+    media_items = list(media_result.scalars().all())
+    if not media_items:
+        await sync_inspection_media_from_disk(db, inspection.id)
+        media_result = await db.execute(
+            select(InspectionMedia)
+            .where(InspectionMedia.inspection_id == inspection.id)
+            .order_by(InspectionMedia.captured_at.asc())
+        )
+        media_items = list(media_result.scalars().all())
+
     finding_outs: list[FindingOut] = []
     for f in findings:
         ago = await inspections_since_first_seen(
@@ -75,6 +92,7 @@ async def _build_summary(db: AsyncSession, inspection: Inspection) -> Inspection
         finding_count=len(finding_outs),
         worst_severity=worst_severity([f.severity for f in findings]),
         findings=finding_outs,
+        media=[MediaOut.model_validate(m) for m in media_items],
     )
 
 
@@ -122,6 +140,30 @@ async def inspection_findings(
         select(Finding).where(Finding.inspection_id == inspection_id)
     )
     return result.scalars().all()
+
+
+@router.get("/{inspection_id}/media", response_model=list[MediaOut])
+async def inspection_media(
+    inspection_id: str, db: AsyncSession = Depends(get_db)
+):
+    inspection = await db.get(Inspection, inspection_id)
+    if inspection is None:
+        raise HTTPException(404, "Inspection not found")
+    rows = await get_inspection_media_rows(db, inspection_id)
+    return rows
+
+
+@router.post("/{inspection_id}/sync-media")
+async def sync_inspection_media(
+    inspection_id: str, db: AsyncSession = Depends(get_db)
+):
+    """Backfill inspection_media rows from files already on disk."""
+    inspection = await db.get(Inspection, inspection_id)
+    if inspection is None:
+        raise HTTPException(404, "Inspection not found")
+    added = await sync_inspection_media_from_disk(db, inspection_id)
+    rows = await get_inspection_media_rows(db, inspection_id)
+    return {"synced": added, "total": len(rows)}
 
 
 @router.post("/{inspection_id}/upload", response_model=UploadResult)

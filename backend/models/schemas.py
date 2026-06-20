@@ -104,6 +104,7 @@ class InspectionSummary(BaseModel):
     finding_count: int
     worst_severity: str
     findings: list[FindingOut] = Field(default_factory=list)
+    media: list[MediaOut] = Field(default_factory=list)
 
 
 class UploadResult(BaseModel):

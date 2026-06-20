@@ -41,6 +41,7 @@ export interface ApiInspectionSummary {
   finding_count: number;
   worst_severity: string;
   findings: ApiFinding[];
+  media?: ApiMedia[];
 }
 
 export interface ApiFleetStats {
@@ -56,6 +57,16 @@ export interface ApiInspection {
   truck_id: string;
   status: string;
   capture_source: string;
+}
+
+export interface ApiMedia {
+  id: string;
+  inspection_id: string;
+  media_type: "photo" | "video";
+  capture_angle: string | null;
+  capture_source: string;
+  storage_path: string;
+  captured_at: string;
 }
 
 export interface TruckCreatePayload {
@@ -78,6 +89,21 @@ export function getTrucks(): Promise<ApiTruck[]> {
 
 export function getInspections(): Promise<ApiInspectionSummary[]> {
   return getJson<ApiInspectionSummary[]>("/inspections");
+}
+
+export function getInspectionMedia(
+  inspectionId: string
+): Promise<ApiMedia[]> {
+  return getJson<ApiMedia[]>(`/inspections/${inspectionId}/media`);
+}
+
+/** Public URL for a file stored on the backend (works through Vite /api proxy). */
+export function mediaUrl(storagePath: string): string {
+  const encoded = storagePath
+    .split("/")
+    .map((seg) => encodeURIComponent(seg))
+    .join("/");
+  return `${API_BASE}/media/${encoded}`;
 }
 
 export function getFleetStats(): Promise<ApiFleetStats> {

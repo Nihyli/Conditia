@@ -49,6 +49,8 @@ class FindingOut(BaseModel):
     description: str | None
     annotated_image_path: str | None
     first_seen_inspection_id: str | None
+    # 0 = new this inspection; N = first seen N inspections ago on this truck
+    first_detected_inspections_ago: int = 0
 
 
 class MediaOut(BaseModel):
@@ -109,3 +111,11 @@ class UploadResult(BaseModel):
     source: str
     status: str
     inspection_id: str
+
+
+class FleetStatsOut(BaseModel):
+    active_trucks: int
+    inspections_today: int
+    inspections_pending: int
+    inspections_complete_today: int
+    open_findings: int

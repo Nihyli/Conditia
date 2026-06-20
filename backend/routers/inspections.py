@@ -22,6 +22,7 @@ from models.schemas import (
     UploadResult,
 )
 from services.analysis import analyze_inspection
+from services.inspection_history import inspections_since_first_seen
 from utils import worst_severity
 
 router = APIRouter(prefix="/inspections", tags=["inspections"])
@@ -48,6 +49,20 @@ async def _build_summary(db: AsyncSession, inspection: Inspection) -> Inspection
         select(Finding).where(Finding.inspection_id == inspection.id)
     )
     findings = result.scalars().all()
+
+    finding_outs: list[FindingOut] = []
+    for f in findings:
+        ago = await inspections_since_first_seen(
+            db=db,
+            truck_id=inspection.truck_id,
+            current_inspection_id=inspection.id,
+            first_seen_inspection_id=f.first_seen_inspection_id,
+        )
+        base = FindingOut.model_validate(f)
+        finding_outs.append(
+            base.model_copy(update={"first_detected_inspections_ago": ago})
+        )
+
     return InspectionSummary(
         id=inspection.id,
         truck_id=inspection.truck_id,
@@ -57,9 +72,9 @@ async def _build_summary(db: AsyncSession, inspection: Inspection) -> Inspection
         started_at=inspection.started_at,
         status=inspection.status,
         capture_source=inspection.capture_source,
-        finding_count=len(findings),
+        finding_count=len(finding_outs),
         worst_severity=worst_severity([f.severity for f in findings]),
-        findings=[FindingOut.model_validate(f) for f in findings],
+        findings=finding_outs,
     )
 
 

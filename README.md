@@ -43,7 +43,21 @@ meaning (Critical = red, Medium = amber, Low = blue, Clear = green).
 
 ## Status
 
-- [x] Fleet dashboard UI (Fleet Overview: KPIs, recent inspections, damage map, findings)
-- [ ] Backend: FastAPI + adapter-pattern ingestion + Supabase
-- [ ] Mobile capture flow (6-angle guided walk-around)
-- [ ] Analysis pipeline (frame extraction + damage detection + change detection)
+- [x] Fleet dashboard UI wired to live API (no mock inspection data)
+- [x] Mobile capture flow with truck registration + upload to backend
+- [x] FastAPI backend with adapter-pattern ingestion + SQLite (local)
+- [ ] Real damage detection (Google Vision / YOLO — currently stubbed)
+- [ ] Supabase production deploy
+
+## Fresh start (no demo seed data)
+
+Demo seeding is **off by default**. For a clean DB:
+
+```powershell
+cd backend
+Remove-Item conditia.db -ErrorAction SilentlyContinue
+Remove-Item -Recurse storage -ErrorAction SilentlyContinue
+uvicorn main:app --reload --port 8000
+```
+
+Then: **New inspection** → register a truck → film → dashboard updates live.

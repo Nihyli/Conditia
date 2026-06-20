@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from config import settings
 from database import init_db
-from routers import findings, inspections, reports, trucks
+from routers import findings, fleet, inspections, reports, trucks
 
 
 @asynccontextmanager
@@ -40,6 +40,7 @@ _storage = Path(settings.storage_dir)
 _storage.mkdir(parents=True, exist_ok=True)
 app.mount("/media", StaticFiles(directory=str(_storage)), name="media")
 
+app.include_router(fleet.router)
 app.include_router(trucks.router)
 app.include_router(inspections.router)
 app.include_router(findings.router)

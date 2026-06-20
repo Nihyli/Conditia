@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
-    seed_on_startup: bool = True
+    seed_on_startup: bool = False
 
     # Optional production integrations.
     supabase_url: str | None = None

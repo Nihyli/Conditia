@@ -12,12 +12,12 @@ interface NavGroup {
   items: NavItem[];
 }
 
-const groups: NavGroup[] = [
+const baseGroups: NavGroup[] = [
   {
     label: "Monitor",
     items: [
       { id: "overview", label: "Fleet overview", icon: "overview" },
-      { id: "trucks", label: "Trucks", icon: "truck", badge: 3 },
+      { id: "trucks", label: "Trucks", icon: "truck" },
       { id: "inspections", label: "Inspections", icon: "clipboard" },
       { id: "findings", label: "Findings", icon: "alert" },
     ],
@@ -35,13 +35,27 @@ const groups: NavGroup[] = [
   },
 ];
 
+function buildGroups(trucksBadge?: number): NavGroup[] {
+  return baseGroups.map((group) => ({
+    ...group,
+    items: group.items.map((item) =>
+      item.id === "trucks" && trucksBadge != null && trucksBadge > 0
+        ? { ...item, badge: trucksBadge }
+        : item
+    ),
+  }));
+}
+
 export function Sidebar({
   active,
   onSelect,
+  trucksBadge,
 }: {
   active: string;
   onSelect: (id: string) => void;
+  trucksBadge?: number;
 }) {
+  const groups = buildGroups(trucksBadge);
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -73,7 +87,7 @@ export function Sidebar({
                 >
                   <Icon size={18} />
                   <span>{item.label}</span>
-                  {item.badge ? (
+                  {item.badge != null && item.badge > 0 ? (
                     <span className="nav__badge">{item.badge}</span>
                   ) : null}
                 </button>

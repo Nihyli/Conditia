@@ -51,7 +51,7 @@ export function RecentInspections({
               className={`insp-row${insp.id === activeId ? " is-active" : ""}`}
               onClick={() => onSelect(insp.id)}
             >
-              <span className="insp-row__id">{insp.truckId}</span>
+              <span className="insp-row__id">{insp.truckLabel}</span>
               <span>
                 <span className="insp-row__truck">
                   {insp.make} {insp.model}

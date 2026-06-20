@@ -1,3 +1,17 @@
+export interface Inspection {
+  id: string;
+  truckId: string;
+  /** Human-readable truck id (license plate or VIN). */
+  truckLabel: string;
+  make: string;
+  model: string;
+  capturedAtLabel: string;
+  relativeLabel: string;
+  source: CaptureSource;
+  status: "complete" | "processing" | "pending" | "failed";
+  findings: Finding[];
+}
+
 export type Severity = "critical" | "medium" | "low" | "clear";
 
 export type CaptureSource = "mobile" | "drone" | "fixed_camera";
@@ -17,25 +31,9 @@ export interface Finding {
   type: "dent" | "scratch" | "crack" | "missing_component" | "rust" | "anomaly";
   severity: Severity;
   location: string;
-  confidence: number; // 0..1
+  confidence: number;
   zone: DamageZone;
-  /**
-   * Change-detection summary. inspectionsAgo === 0 means first seen this
-   * inspection (i.e. brand new). > 0 means previously detected N inspections ago.
-   */
   firstDetectedInspectionsAgo: number;
-}
-
-export interface Inspection {
-  id: string;
-  truckId: string;
-  make: string;
-  model: string;
-  capturedAtLabel: string; // e.g. "Today, 9:14 AM"
-  relativeLabel: string; // e.g. "6 min ago"
-  source: CaptureSource;
-  status: "complete" | "processing" | "pending";
-  findings: Finding[];
 }
 
 export interface FleetStat {

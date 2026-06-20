@@ -4,6 +4,7 @@ import {
   type ApiTruck,
   API_BASE,
   createInspection,
+  createTruck,
   getTrucks,
   uploadMedia,
 } from "../api";
@@ -51,6 +52,11 @@ export function CapturePage() {
   const [starting, setStarting] = useState(false);
   const [status, setStatus] = useState<Record<string, AngleState>>(initialStatus);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [regPlate, setRegPlate] = useState("");
+  const [regVin, setRegVin] = useState("");
+  const [regMake, setRegMake] = useState("");
+  const [regModel, setRegModel] = useState("");
+  const [registering, setRegistering] = useState(false);
 
   useEffect(() => {
     void loadTrucks();
@@ -65,6 +71,33 @@ export function CapturePage() {
       setSelectedTruckId((cur) => cur || truckId || (t[0]?.id ?? ""));
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : "Failed to reach the API");
+    }
+  }
+
+  async function registerTruck() {
+    if (!regVin.trim()) {
+      setActionError("VIN is required");
+      return;
+    }
+    setRegistering(true);
+    setActionError(null);
+    try {
+      const truck = await createTruck({
+        vin: regVin.trim(),
+        license_plate: regPlate.trim() || undefined,
+        make: regMake.trim() || undefined,
+        model: regModel.trim() || undefined,
+      });
+      await loadTrucks();
+      setSelectedTruckId(truck.id);
+      setRegPlate("");
+      setRegVin("");
+      setRegMake("");
+      setRegModel("");
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Could not register truck");
+    } finally {
+      setRegistering(false);
     }
   }
 
@@ -154,6 +187,65 @@ export function CapturePage() {
               </div>
             ) : trucks === null ? (
               <p className="muted" style={{ marginTop: 16 }}>Loading trucks…</p>
+            ) : trucks.length === 0 ? (
+              <>
+                <p className="muted" style={{ marginTop: 8 }}>
+                  No trucks in the fleet yet. Register one to start inspecting.
+                </p>
+                <label className="field-label" htmlFor="plate">
+                  License plate / fleet ID
+                </label>
+                <input
+                  id="plate"
+                  className="select"
+                  placeholder="TRK-041"
+                  value={regPlate}
+                  onChange={(e) => setRegPlate(e.target.value)}
+                />
+                <label className="field-label" htmlFor="vin">
+                  VIN (required)
+                </label>
+                <input
+                  id="vin"
+                  className="select"
+                  placeholder="1FUJGLDR0CSBT0041"
+                  value={regVin}
+                  onChange={(e) => setRegVin(e.target.value)}
+                />
+                <label className="field-label" htmlFor="make">
+                  Make
+                </label>
+                <input
+                  id="make"
+                  className="select"
+                  placeholder="Freightliner"
+                  value={regMake}
+                  onChange={(e) => setRegMake(e.target.value)}
+                />
+                <label className="field-label" htmlFor="model">
+                  Model
+                </label>
+                <input
+                  id="model"
+                  className="select"
+                  placeholder="Cascadia"
+                  value={regModel}
+                  onChange={(e) => setRegModel(e.target.value)}
+                />
+                {actionError && <p className="error-note">{actionError}</p>}
+                <div className="btn-row">
+                  <button
+                    className="primary-btn"
+                    onClick={() => void registerTruck()}
+                    disabled={registering}
+                  >
+                    {registering ? "Registering…" : "Register truck"}
+                  </button>
+                  <Link to="/" className="text-btn">
+                    Back
+                  </Link>
+                </div>
+              </>
             ) : (
               <>
                 <label className="field-label" htmlFor="truck">

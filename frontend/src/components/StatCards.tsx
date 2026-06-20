@@ -1,5 +1,4 @@
 import type { FleetStat } from "../types";
-import { fleetStats } from "../data";
 import {
   IconArrowUp,
   IconArrowDown,
@@ -22,10 +21,10 @@ function TrendMark({ kind }: { kind: FleetStat["trendKind"] }) {
   return null;
 }
 
-export function StatCards() {
+export function StatCards({ stats }: { stats: FleetStat[] }) {
   return (
     <section className="stats">
-      {fleetStats.map((stat) => {
+      {stats.map((stat) => {
         const Icon = headIcon[stat.icon as keyof typeof headIcon] ?? IconTruck;
         return (
           <article className="stat" key={stat.id}>

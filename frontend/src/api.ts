@@ -1,11 +1,11 @@
 /**
- * Conditia API client. Talks to the FastAPI backend.
- * Base URL is configurable via VITE_API_URL (defaults to local dev backend).
+ * Conditia API client.
+ * In dev, requests go through Vite's /api proxy (see vite.config.ts).
+ * Override with VITE_API_URL if needed.
  */
-
 export const API_BASE: string =
-  (import.meta.env.VITE_API_URL as string | undefined) ??
-  "http://localhost:8000";
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.DEV ? "/api" : "http://localhost:8000");
 
 export interface ApiTruck {
   id: string;
@@ -16,11 +16,54 @@ export interface ApiTruck {
   license_plate: string | null;
 }
 
+export interface ApiFinding {
+  id: string;
+  inspection_id: string;
+  title: string | null;
+  finding_type: string;
+  severity: string;
+  confidence: number;
+  zone: string | null;
+  location: string | null;
+  first_seen_inspection_id: string | null;
+  first_detected_inspections_ago: number;
+}
+
+export interface ApiInspectionSummary {
+  id: string;
+  truck_id: string;
+  truck_label: string;
+  make: string | null;
+  model: string | null;
+  started_at: string;
+  status: string;
+  capture_source: string;
+  finding_count: number;
+  worst_severity: string;
+  findings: ApiFinding[];
+}
+
+export interface ApiFleetStats {
+  active_trucks: number;
+  inspections_today: number;
+  inspections_pending: number;
+  inspections_complete_today: number;
+  open_findings: number;
+}
+
 export interface ApiInspection {
   id: string;
   truck_id: string;
   status: string;
   capture_source: string;
+}
+
+export interface TruckCreatePayload {
+  vin: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  license_plate?: string;
 }
 
 async function getJson<T>(path: string): Promise<T> {
@@ -31,6 +74,24 @@ async function getJson<T>(path: string): Promise<T> {
 
 export function getTrucks(): Promise<ApiTruck[]> {
   return getJson<ApiTruck[]>("/trucks");
+}
+
+export function getInspections(): Promise<ApiInspectionSummary[]> {
+  return getJson<ApiInspectionSummary[]>("/inspections");
+}
+
+export function getFleetStats(): Promise<ApiFleetStats> {
+  return getJson<ApiFleetStats>("/fleet/stats");
+}
+
+export async function createTruck(payload: TruckCreatePayload): Promise<ApiTruck> {
+  const res = await fetch(`${API_BASE}/trucks`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Create truck failed: ${res.status}`);
+  return res.json() as Promise<ApiTruck>;
 }
 
 export async function createInspection(
@@ -45,10 +106,6 @@ export async function createInspection(
   return res.json() as Promise<ApiInspection>;
 }
 
-/**
- * Upload one captured clip for a given angle, reporting upload progress (0..1).
- * Uses XHR so we can surface per-angle progress in the UI.
- */
 export function uploadMedia(params: {
   inspectionId: string;
   blob: Blob;

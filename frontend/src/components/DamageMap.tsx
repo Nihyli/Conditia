@@ -161,7 +161,7 @@ export function DamageMap({ inspection }: { inspection: Inspection }) {
     <section className="panel">
       <div className="panel__head">
         <h2 className="panel__title">
-          {inspection.truckId} — Damage map
+          {inspection.truckLabel} — Damage map
         </h2>
         <div className="panel__spacer" />
         <button className="ghost-btn">

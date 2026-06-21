@@ -2,8 +2,12 @@
 
 import logging
 import tempfile
+from collections.abc import Awaitable, Callable
+from contextlib import AbstractAsyncContextManager
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Protocol
 
 import anyio
 from sqlalchemy import delete, select, update
@@ -11,11 +15,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import SessionLocal
 from domain import InspectionStatus
-from models.db_models import Finding, Inspection, InspectionMedia
+from models.db_models import Finding, Inspection, InspectionMedia, Report
 from services import report_generator
 from services.change_detection import find_first_occurrence
 from services.storage import storage_service
-from services.vision import DetectionFailed, DetectorUnavailable, detect_damage
+from services.vision import (
+    DetectionBatch,
+    DetectionFailed,
+    DetectorUnavailable,
+    detect_damage,
+)
 
 logger = logging.getLogger(__name__)
 VIDEO_SUFFIXES = (".mp4", ".mov", ".webm", ".avi")
@@ -23,6 +32,38 @@ VIDEO_SUFFIXES = (".mp4", ".mov", ".webm", ".avi")
 
 class FrameExtractionUnavailable(Exception):
     pass
+
+
+class MaterializedStorage(Protocol):
+    def materialize(self, path: str) -> AbstractAsyncContextManager[Path]: ...
+
+
+class ReportBuilder(Protocol):
+    async def __call__(
+        self,
+        db: AsyncSession,
+        inspection_id: str,
+        *,
+        requires_human_review: bool = False,
+    ) -> Report: ...
+
+
+Detector = Callable[[Path], Awaitable[DetectionBatch]]
+
+
+@dataclass(frozen=True)
+class AnalysisDependencies:
+    storage: MaterializedStorage
+    detector: Detector
+    report_builder: ReportBuilder
+
+
+def default_analysis_dependencies() -> AnalysisDependencies:
+    return AnalysisDependencies(
+        storage=storage_service,
+        detector=detect_damage,
+        report_builder=report_generator.generate,
+    )
 
 
 def extract_frames(
@@ -81,10 +122,11 @@ async def _analyze_frames(
     inspection: Inspection,
     media: InspectionMedia,
     frames: list[Path],
+    detector: Detector,
 ) -> bool:
     requires_review = False
     for frame_path in frames:
-        batch = await detect_damage(frame_path)
+        batch = await detector(frame_path)
         requires_review = requires_review or batch.requires_human_review
         for detection in batch.detections:
             first_seen = await find_first_occurrence(
@@ -112,8 +154,12 @@ async def _analyze_frames(
     return requires_review
 
 
-async def analyze_inspection(inspection_id: str) -> None:
+async def analyze_inspection(
+    inspection_id: str,
+    dependencies: AnalysisDependencies | None = None,
+) -> None:
     """Claim one submitted inspection and analyze it exactly once per submission."""
+    dependencies = dependencies or default_analysis_dependencies()
     async with SessionLocal() as db:
         claim = await db.execute(
             update(Inspection)
@@ -145,7 +191,9 @@ async def analyze_inspection(inspection_id: str) -> None:
             requires_review = False
 
             for media in media_items:
-                async with storage_service.materialize(media.storage_path) as local_path:
+                async with dependencies.storage.materialize(
+                    media.storage_path
+                ) as local_path:
                     with tempfile.TemporaryDirectory(
                         prefix="conditia-frames-"
                     ) as frame_directory:
@@ -155,12 +203,18 @@ async def analyze_inspection(inspection_id: str) -> None:
                             Path(frame_directory),
                         )
                         requires_review = (
-                            await _analyze_frames(db, inspection, media, frames)
+                            await _analyze_frames(
+                                db,
+                                inspection,
+                                media,
+                                frames,
+                                dependencies.detector,
+                            )
                             or requires_review
                         )
 
             await db.flush()
-            await report_generator.generate(
+            await dependencies.report_builder(
                 db,
                 inspection_id,
                 requires_human_review=requires_review,

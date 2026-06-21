@@ -34,6 +34,7 @@ async def reset_state() -> AsyncGenerator[None, None]:
     shutil.rmtree(TEST_STORAGE, ignore_errors=True)
     TEST_STORAGE.mkdir(parents=True, exist_ok=True)
     yield
+    await engine.dispose()
 
 
 @pytest.fixture

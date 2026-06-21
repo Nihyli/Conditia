@@ -1,0 +1,15 @@
+import "@testing-library/jest-dom/vitest";
+import { cleanup } from "@testing-library/react";
+import { afterEach, vi } from "vitest";
+
+afterEach(() => {
+  cleanup();
+  vi.clearAllTimers();
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
+Object.defineProperty(HTMLMediaElement.prototype, "play", {
+  configurable: true,
+  value: vi.fn().mockResolvedValue(undefined),
+});

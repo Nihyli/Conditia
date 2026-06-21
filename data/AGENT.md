@@ -34,7 +34,7 @@ Important patterns already present and worth preserving:
 - UI design tokens and severity semantics are centralized in `styles.css`.
 - Change-over-time information is a first-class product concept, not a view-only calculation.
 
-The current implementation only partially enforces the intended layers. `routers/inspections.py` still performs ingestion/finalization orchestration, services instantiate concrete global dependencies, and no repository layer exists. Inspection response assembly has moved into a query service. Future changes should improve these boundaries incrementally rather than rewriting the application at once.
+The current implementation incrementally enforces the intended layers. Inspection writes live in `InspectionIngestionService`, response assembly lives in a query service, and capture/analysis infrastructure is composed through explicit capabilities. Job execution still constructs sessions directly and no repository layer exists. Future changes should improve these boundaries only where an operational use case warrants it rather than rewriting the application at once.
 
 ## Important Design Rules
 
@@ -90,8 +90,8 @@ The current implementation only partially enforces the intended layers. `routers
 | Upload/request controls | Per-file and declared-body limits exist, but missing/chunked lengths, rate limits, tenant quotas, and total storage limits remain. | Authenticated abuse can consume parser space, bandwidth, storage, and worker capacity. | Enforce edge body/rate limits and application tenant/storage/concurrency quotas. | Medium |
 | `backend/services/analysis.py` | A database transaction remains open during media, video, and cloud processing. | Long transactions hold connections/locks and increase contention and rollback cost. | Detect outside the transaction; use a short lease-check-and-persist transaction. | Medium |
 | Inspection coverage | The backend finalizes after one media row while the six-angle UI allows every angle to be skipped. | Incomplete inspections can look structurally valid. | Define configurable server-side coverage templates and authorized override reasons. | Medium |
-| Backend global dependencies | Analysis/jobs import `SessionLocal`, storage, detector, and report implementations directly. | Failure tests and alternate infrastructure require monkeypatching and broad changes. | Inject repository, unit-of-work, storage, detector, and job ports at a composition root. | Medium |
-| Frontend `CapturePage.tsx`, API boundary, and tests | Capture remains a 433-line component; most responses use compile-time casts; only mapper tests exist. | UI workflows and contract failures can regress without component/E2E evidence. | Extract a reducer/hook and phase components; generate/validate API contracts; add component and E2E tests. | Medium |
+| Backend job persistence | `analysis_jobs.py` still constructs `SessionLocal` directly even though ingestion and analysis infrastructure are injectable. | A future dedicated worker will need explicit unit-of-work/lease boundaries. | Introduce worker/repository ports together with the leased-worker design; do not add empty indirection first. | Medium |
+| Frontend API contracts and capture setup | Capture-session logic is extracted and component coverage is high, but API responses remain compile-time casts and truck setup remains in the page. | Contract drift is detected late, and setup behavior will become harder to extend. | Generate/runtime-validate API contracts; extract truck setup when it gains independent behavior; add E2E coverage. | Medium |
 
 ## Refactoring Recommendations
 
@@ -102,9 +102,9 @@ Apply these in order and keep each change independently reviewable:
 3. Define and enforce inspection coverage, model validation, severity, and human-review policy.
 4. Shorten analysis transactions and formalize object-storage staging/reconciliation.
 5. Enforce edge request/rate limits plus tenant storage and concurrency quotas.
-6. Move upload/finalization from `routers/inspections.py` into injected command services.
+6. Introduce repository/unit-of-work boundaries together with the leased-worker implementation.
 7. Add PostgreSQL/RLS/Supabase and real concurrency integration tests.
-8. Decompose `CapturePage` around a tested capture-session reducer/hook and generated/runtime-validated API client.
+8. Generate or runtime-validate the API client and extract truck setup when that UI gains behavior.
 9. Add production metrics, audit events, backup/restore, retention, and deployment security controls.
 10. Remove tracked runtime data after explicit privacy/ownership approval.
 

@@ -1,13 +1,15 @@
-"""Application composition for capture-source implementations."""
+"""Extensible lookup for configured capture-source implementations."""
 
 from adapters.base import CaptureAdapter
-from adapters.mobile import MobileAdapter
 from domain import IngestibleCaptureSource
 
-CAPTURE_ADAPTERS: dict[IngestibleCaptureSource, CaptureAdapter] = {
-    IngestibleCaptureSource.MOBILE: MobileAdapter(),
-}
 
+class CaptureAdapterRegistry:
+    def __init__(
+        self,
+        adapters: dict[IngestibleCaptureSource, CaptureAdapter],
+    ) -> None:
+        self._adapters = dict(adapters)
 
-def get_capture_adapter(source: IngestibleCaptureSource) -> CaptureAdapter:
-    return CAPTURE_ADAPTERS[source]
+    def get(self, source: IngestibleCaptureSource) -> CaptureAdapter:
+        return self._adapters[source]

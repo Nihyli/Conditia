@@ -4,6 +4,7 @@ import os
 import sqlite3
 import subprocess
 import sys
+from contextlib import closing
 from pathlib import Path
 
 
@@ -14,7 +15,7 @@ def test_legacy_sqlite_uuid_migration_preserves_relationships(tmp_path: Path) ->
     inspection_id = "30000000-0000-0000-0000-000000000003"
     media_id = "40000000-0000-0000-0000-000000000004"
 
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection:
         connection.executescript(
             """
             PRAGMA foreign_keys=ON;
@@ -46,6 +47,7 @@ def test_legacy_sqlite_uuid_migration_preserves_relationships(tmp_path: Path) ->
             "INSERT INTO inspection_media(id, inspection_id) VALUES (?, ?)",
             (media_id, inspection_id),
         )
+        connection.commit()
 
     backend_dir = Path(__file__).parents[1]
     environment = {
@@ -75,7 +77,7 @@ def test_legacy_sqlite_uuid_migration_preserves_relationships(tmp_path: Path) ->
         text=True,
     )
 
-    with sqlite3.connect(database_path) as connection:
+    with closing(sqlite3.connect(database_path)) as connection:
         inspection_row = connection.execute(
             "SELECT id, truck_id FROM inspections"
         ).fetchone()

@@ -10,16 +10,15 @@ from fastapi import (
     Query,
     UploadFile,
 )
-from sqlalchemy import func, select, update
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters.base import CaptureMetadata
-from adapters.registry import get_capture_adapter
 from config import settings
 from database import get_db
-from domain import CaptureAngle, IngestibleCaptureSource, InspectionStatus
-from models.db_models import AnalysisJob, Finding, Inspection, InspectionMedia, Truck
+from dependencies import get_inspection_ingestion_service
+from domain import CaptureAngle, IngestibleCaptureSource
+from models.db_models import Finding, Inspection, InspectionMedia, Truck
 from models.schemas import (
     FindingOut,
     InspectionCreate,
@@ -30,8 +29,12 @@ from models.schemas import (
 )
 from security import Principal, require_api_access
 from services.analysis_jobs import run_analysis_job
+from services.inspection_ingestion import (
+    InspectionConflict,
+    InspectionIngestionService,
+)
 from services.inspection_queries import build_inspection_summaries
-from services.storage import StorageError, storage_service
+from services.storage import StorageError
 
 router = APIRouter(prefix="/inspections", tags=["inspections"])
 
@@ -51,6 +54,9 @@ async def create_inspection(
     payload: InspectionCreate,
     db: AsyncSession = Depends(get_db),
     principal: Principal = Depends(require_api_access),
+    ingestion: InspectionIngestionService = Depends(
+        get_inspection_ingestion_service
+    ),
 ):
     truck_id = str(payload.truck_id)
     truck_statement = select(Truck).where(Truck.id == truck_id)
@@ -59,15 +65,11 @@ async def create_inspection(
     truck = (await db.execute(truck_statement)).scalar_one_or_none()
     if truck is None:
         raise HTTPException(404, "Truck not found")
-    inspection = Inspection(
+    return await ingestion.start(
+        db,
         truck_id=truck_id,
-        capture_source=payload.capture_source.value,
-        status=InspectionStatus.UPLOADING.value,
+        source=payload.capture_source,
     )
-    db.add(inspection)
-    await db.commit()
-    await db.refresh(inspection)
-    return inspection
 
 
 @router.get("", response_model=list[InspectionSummary])
@@ -139,13 +141,14 @@ async def upload_media(
     gps_lng: float | None = Form(None),
     db: AsyncSession = Depends(get_db),
     principal: Principal = Depends(require_api_access),
+    ingestion: InspectionIngestionService = Depends(
+        get_inspection_ingestion_service
+    ),
 ):
     inspection_key = str(inspection_id)
     inspection = await _get_authorized_inspection(db, inspection_key, principal)
     if inspection is None:
         raise HTTPException(404, "Inspection not found")
-    if inspection.status != InspectionStatus.UPLOADING.value:
-        raise HTTPException(409, "Inspection is not accepting uploads")
     if not files:
         raise HTTPException(400, "At least one media file is required")
     if len(files) > settings.max_files_per_upload:
@@ -158,41 +161,25 @@ async def upload_media(
     if gps_lng is not None and not -180 <= gps_lng <= 180:
         raise HTTPException(422, "gps_lng must be between -180 and 180")
 
-    adapter = get_capture_adapter(capture_source)
-
     metadata = CaptureMetadata(gps_lat=gps_lat, gps_lng=gps_lng)
 
     try:
-        stored_items = await adapter.receive_media(
-            inspection_key, files, capture_angle.value, metadata
+        result = await ingestion.ingest(
+            db,
+            inspection=inspection,
+            files=files,
+            angle=capture_angle,
+            source=capture_source,
+            metadata=metadata,
         )
+    except InspectionConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
     except StorageError as exc:
         raise HTTPException(400, str(exc)) from exc
 
-    try:
-        for item in stored_items:
-            db.add(
-                InspectionMedia(
-                    inspection_id=inspection_key,
-                    media_type=item.media_type,
-                    capture_angle=capture_angle.value,
-                    capture_source=adapter.get_source_name(),
-                    storage_path=item.storage_path,
-                    gps_lat=metadata.gps_lat,
-                    gps_lng=metadata.gps_lng,
-                )
-            )
-        inspection.capture_source = adapter.get_source_name()
-        await db.commit()
-    except Exception:
-        await db.rollback()
-        for item in stored_items:
-            await storage_service.delete(item.storage_path)
-        raise
-
     return UploadResult(
-        uploaded=len(stored_items),
-        source=capture_source.value,
+        uploaded=result.uploaded,
+        source=result.source,
         status="media_uploaded",
         inspection_id=inspection_key,
     )
@@ -204,40 +191,17 @@ async def finalize_inspection(
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     principal: Principal = Depends(require_api_access),
+    ingestion: InspectionIngestionService = Depends(
+        get_inspection_ingestion_service
+    ),
 ):
     inspection_key = str(inspection_id)
     inspection = await _get_authorized_inspection(db, inspection_key, principal)
     if inspection is None:
         raise HTTPException(404, "Inspection not found")
-    if inspection.status != InspectionStatus.UPLOADING.value:
-        raise HTTPException(409, "Inspection has already been finalized")
-
-    media_count = await db.scalar(
-        select(func.count())
-        .select_from(InspectionMedia)
-        .where(InspectionMedia.inspection_id == inspection_key)
-    )
-    if not media_count:
-        raise HTTPException(409, "Upload at least one media file before finalizing")
-
-    transition = await db.execute(
-        update(Inspection)
-        .where(
-            Inspection.id == inspection_key,
-            Inspection.status == InspectionStatus.UPLOADING.value,
-        )
-        .values(status=InspectionStatus.SUBMITTED.value)
-    )
-    if transition.rowcount != 1:
-        await db.rollback()
-        raise HTTPException(409, "Inspection has already been finalized")
-    analysis_job = AnalysisJob(inspection_id=inspection_key, status="pending")
-    db.add(analysis_job)
     try:
-        await db.commit()
-    except IntegrityError as exc:
-        await db.rollback()
-        raise HTTPException(409, "Inspection has already been finalized") from exc
-    await db.refresh(inspection)
-    background_tasks.add_task(run_analysis_job, analysis_job.id)
-    return inspection
+        result = await ingestion.finalize(db, inspection=inspection)
+    except InspectionConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
+    background_tasks.add_task(run_analysis_job, result.job_id)
+    return result.inspection

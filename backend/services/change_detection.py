@@ -9,6 +9,7 @@ location signatures and tolerance (see the technical writeup).
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from domain import InspectionStatus
 from models.db_models import Finding, Inspection
 
 
@@ -39,7 +40,12 @@ async def find_first_occurrence(
         .where(
             Inspection.truck_id == truck_id,
             Inspection.started_at < current_started_at,
-            Inspection.status.in_(("complete", "review_required")),
+            Inspection.status.in_(
+                (
+                    InspectionStatus.COMPLETE.value,
+                    InspectionStatus.REVIEW_REQUIRED.value,
+                )
+            ),
             Finding.finding_type == finding_type,
             Finding.zone == zone,
         )

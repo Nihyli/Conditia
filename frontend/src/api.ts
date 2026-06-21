@@ -92,35 +92,52 @@ async function fetchWithTimeout(
   }
 }
 
-async function getJson<T>(path: string): Promise<T> {
-  const res = await fetchWithTimeout(`${API_BASE}${path}`);
-  if (!res.ok) {
-    throw new Error(await errorMessage(res, `GET ${path} failed: ${res.status}`));
-  }
-  return res.json() as Promise<T>;
-}
-
 async function errorMessage(res: Response, fallback: string): Promise<string> {
   try {
-    const payload = (await res.json()) as { detail?: unknown };
-    return typeof payload.detail === "string" ? payload.detail : fallback;
+    return detailMessage(await res.json(), fallback);
   } catch {
     return fallback;
   }
 }
 
+function detailMessage(payload: unknown, fallback: string): string {
+  if (
+    typeof payload === "object" &&
+    payload !== null &&
+    "detail" in payload &&
+    typeof payload.detail === "string"
+  ) {
+    return payload.detail;
+  }
+  return fallback;
+}
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetchWithTimeout(`${API_BASE}${path}`, init);
+  if (!response.ok) {
+    const method = init?.method ?? "GET";
+    throw new Error(
+      await errorMessage(
+        response,
+        `${method} ${path} failed: ${response.status}`
+      )
+    );
+  }
+  return response.json() as Promise<T>;
+}
+
 export function getTrucks(): Promise<ApiTruck[]> {
-  return getJson<ApiTruck[]>("/trucks");
+  return requestJson<ApiTruck[]>("/trucks");
 }
 
 export function getInspections(): Promise<ApiInspectionSummary[]> {
-  return getJson<ApiInspectionSummary[]>("/inspections");
+  return requestJson<ApiInspectionSummary[]>("/inspections");
 }
 
 export function getInspectionMedia(
   inspectionId: string
 ): Promise<ApiMedia[]> {
-  return getJson<ApiMedia[]>(`/inspections/${inspectionId}/media`);
+  return requestJson<ApiMedia[]>(`/inspections/${inspectionId}/media`);
 }
 
 /** Authorized media-delivery endpoint (local file or short-lived redirect). */
@@ -129,50 +146,32 @@ export function mediaUrl(mediaId: string): string {
 }
 
 export function getFleetStats(): Promise<ApiFleetStats> {
-  return getJson<ApiFleetStats>("/fleet/stats");
+  return requestJson<ApiFleetStats>("/fleet/stats");
 }
 
-export async function createTruck(payload: TruckCreatePayload): Promise<ApiTruck> {
-  const res = await fetchWithTimeout(`${API_BASE}/trucks`, {
+export function createTruck(payload: TruckCreatePayload): Promise<ApiTruck> {
+  return requestJson<ApiTruck>("/trucks", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) {
-    throw new Error(await errorMessage(res, `Create truck failed: ${res.status}`));
-  }
-  return res.json() as Promise<ApiTruck>;
 }
 
-export async function createInspection(
-  truckId: string
-): Promise<ApiInspection> {
-  const res = await fetchWithTimeout(`${API_BASE}/inspections`, {
+export function createInspection(truckId: string): Promise<ApiInspection> {
+  return requestJson<ApiInspection>("/inspections", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ truck_id: truckId, capture_source: "mobile" }),
   });
-  if (!res.ok) {
-    throw new Error(
-      await errorMessage(res, `Create inspection failed: ${res.status}`)
-    );
-  }
-  return res.json() as Promise<ApiInspection>;
 }
 
-export async function finalizeInspection(
+export function finalizeInspection(
   inspectionId: string
 ): Promise<ApiInspection> {
-  const res = await fetchWithTimeout(
-    `${API_BASE}/inspections/${inspectionId}/finalize`,
+  return requestJson<ApiInspection>(
+    `/inspections/${inspectionId}/finalize`,
     { method: "POST" }
   );
-  if (!res.ok) {
-    throw new Error(
-      await errorMessage(res, `Finalize inspection failed: ${res.status}`)
-    );
-  }
-  return res.json() as Promise<ApiInspection>;
 }
 
 export function uploadMedia(params: {
@@ -200,7 +199,15 @@ export function uploadMedia(params: {
         onProgress?.(1);
         resolve();
       } else {
-        reject(new Error(xhr.responseText || `Upload failed: ${xhr.status}`));
+        let payload: unknown;
+        try {
+          payload = JSON.parse(xhr.responseText);
+        } catch {
+          payload = null;
+        }
+        reject(
+          new Error(detailMessage(payload, `Upload failed: ${xhr.status}`))
+        );
       }
     };
     xhr.onerror = () => reject(new Error("Network error during upload"));

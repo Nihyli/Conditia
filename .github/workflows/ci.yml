@@ -25,10 +25,10 @@ jobs:
             backend/requirements-dev.txt
       - run: python -m pip install -r requirements-dev.txt
       - run: ruff check .
-      - run: python -m pytest -q
+      - run: python -m pytest -q --cov --cov-report=term-missing --cov-fail-under=80
       - run: DATABASE_URL=sqlite+aiosqlite:////tmp/conditia-ci.db python -m alembic upgrade head
       - run: DATABASE_URL=sqlite+aiosqlite:////tmp/conditia-ci.db python -m alembic check
-      - run: python -m pip_audit -r requirements.txt
+      - run: python -m pip_audit -r requirements-dev.txt
 
   frontend:
     runs-on: ubuntu-latest
@@ -43,6 +43,6 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      - run: npm test
+      - run: npm run test:coverage
       - run: npm run build
       - run: npm audit --omit=dev --audit-level=high

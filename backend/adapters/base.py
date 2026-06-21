@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Protocol
 
 from fastapi import UploadFile
 
@@ -19,13 +20,30 @@ class StoredMedia:
     size_bytes: int
 
 
-class CaptureAdapter(ABC):
-    """Abstract interface for all capture sources.
+class StoredUpload(Protocol):
+    """Small storage result contract required by capture adapters."""
 
-    Mobile, drone, and fixed camera all implement this. Adding a new capture
-    source means implementing this class only -- no other file in the system
-    changes. This is the entire point of the hardware-agnostic architecture.
-    """
+    storage_path: str
+    media_type: str
+    content_type: str
+    size_bytes: int
+
+
+class MediaWriter(Protocol):
+    """Write/delete capability required during capture ingestion."""
+
+    async def upload(
+        self,
+        file: UploadFile,
+        inspection_id: str,
+        capture_angle: str,
+    ) -> StoredUpload: ...
+
+    async def delete(self, path: str) -> None: ...
+
+
+class CaptureAdapter(ABC):
+    """Source-specific media ingestion contract."""
 
     @abstractmethod
     async def receive_media(
@@ -43,5 +61,5 @@ class CaptureAdapter(ABC):
 
     @abstractmethod
     def get_source_name(self) -> str:
-        """Return 'mobile', 'drone', 'fixed_camera', etc."""
+        """Return the persisted capture-source value."""
         raise NotImplementedError

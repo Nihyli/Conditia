@@ -1,7 +1,8 @@
 # Conditia backend
 
-FastAPI ingestion and analysis service. Mobile capture is implemented; drone
-and fixed-camera adapters remain future capabilities.
+FastAPI ingestion and analysis service. Mobile is the only registered ingestion
+source. Other persisted source values are retained for compatibility with
+historical/imported records, not as partially implemented adapters.
 
 ## Run locally
 

@@ -1,7 +1,6 @@
 from fastapi import UploadFile
 
-from adapters.base import CaptureAdapter, CaptureMetadata, StoredMedia
-from services.storage import storage_service
+from adapters.base import CaptureAdapter, CaptureMetadata, MediaWriter, StoredMedia
 
 
 class MobileAdapter(CaptureAdapter):
@@ -14,6 +13,9 @@ class MobileAdapter(CaptureAdapter):
     def get_source_name(self) -> str:
         return "mobile"
 
+    def __init__(self, storage: MediaWriter) -> None:
+        self._storage = storage
+
     async def receive_media(
         self,
         inspection_id: str,
@@ -24,7 +26,7 @@ class MobileAdapter(CaptureAdapter):
         stored: list[StoredMedia] = []
         try:
             for file in files:
-                result = await storage_service.upload(
+                result = await self._storage.upload(
                     file=file,
                     inspection_id=inspection_id,
                     capture_angle=capture_angle,
@@ -40,5 +42,5 @@ class MobileAdapter(CaptureAdapter):
             return stored
         except Exception:
             for item in stored:
-                await storage_service.delete(item.storage_path)
+                await self._storage.delete(item.storage_path)
             raise

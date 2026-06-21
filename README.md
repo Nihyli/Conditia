@@ -55,16 +55,20 @@ is experimental and also requires human review.
 ```bash
 cd backend
 .venv/bin/ruff check .
-.venv/bin/pytest -q
+.venv/bin/python -m pytest -q --cov --cov-report=term-missing --cov-fail-under=80
 .venv/bin/pip-audit -r requirements.txt
 
 cd ../frontend
-npm test
+npm run test:coverage
 npm run build
 npm audit --omit=dev
 ```
 
-CI runs the same checks and verifies the initial Alembic migration.
+CI runs the same checks and verifies the Alembic migration chain. Coverage gates
+are intentionally risk-based rather than test-count based: backend total coverage
+must remain at least 80%; frontend statements/branches/functions/lines must remain
+at least 85/75/80/90 percent. Add behavior-focused tests when changing a boundary
+or business rule instead of creating shallow assertions to inflate the count.
 
 ## Production boundary
 

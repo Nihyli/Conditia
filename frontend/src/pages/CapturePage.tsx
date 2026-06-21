@@ -3,43 +3,19 @@ import { Link, useParams } from "react-router-dom";
 import {
   type ApiTruck,
   API_BASE,
-  createInspection,
   createTruck,
-  finalizeInspection,
   getTrucks,
-  uploadMedia,
 } from "../api";
-import { AngleGuide, type AngleSpec } from "../components/capture/AngleGuide";
+import { AngleGuide } from "../components/capture/AngleGuide";
 import {
   IconArrowLeft,
   IconCheck,
   IconRefresh,
 } from "../components/icons";
-
-const ANGLES: AngleSpec[] = [
-  { key: "front", label: "Front", hint: "Stand at the front. Film the grille, bumper, and windshield." },
-  { key: "driver_side", label: "Driver side", hint: "Walk the driver side, keeping the full length in frame." },
-  { key: "rear", label: "Rear", hint: "Film the rear doors, lights, and bumper." },
-  { key: "passenger_side", label: "Passenger side", hint: "Walk the passenger side end to end." },
-  { key: "top", label: "Top", hint: "Hold the phone high. Capture the roof and trailer top." },
-  { key: "undercarriage", label: "Undercarriage", hint: "Low angle near the rear axle. Mind your footing." },
-];
-
-type AngleState = {
-  state: "pending" | "uploading" | "done" | "error";
-  progress: number;
-  error?: string;
-};
-
-type Phase = "select" | "capture" | "done";
-
-function initialStatus(): Record<string, AngleState> {
-  return Object.fromEntries(
-    ANGLES.map(
-      (a) => [a.key, { state: "pending", progress: 0 }] as [string, AngleState]
-    )
-  );
-}
+import {
+  CAPTURE_ANGLES,
+  useCaptureSession,
+} from "../features/capture/useCaptureSession";
 
 export function CapturePage() {
   const { truckId } = useParams();
@@ -47,18 +23,13 @@ export function CapturePage() {
   const [trucks, setTrucks] = useState<ApiTruck[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedTruckId, setSelectedTruckId] = useState<string>(truckId ?? "");
-  const [phase, setPhase] = useState<Phase>("select");
-  const [inspectionId, setInspectionId] = useState<string | null>(null);
-  const [angleIndex, setAngleIndex] = useState(0);
-  const [starting, setStarting] = useState(false);
-  const [status, setStatus] = useState<Record<string, AngleState>>(initialStatus);
-  const [actionError, setActionError] = useState<string | null>(null);
+  const captureSession = useCaptureSession();
+  const [registrationError, setRegistrationError] = useState<string | null>(null);
   const [regPlate, setRegPlate] = useState("");
   const [regVin, setRegVin] = useState("");
   const [regMake, setRegMake] = useState("");
   const [regModel, setRegModel] = useState("");
   const [registering, setRegistering] = useState(false);
-  const [finalizing, setFinalizing] = useState(false);
 
   useEffect(() => {
     void loadTrucks();
@@ -78,11 +49,11 @@ export function CapturePage() {
 
   async function registerTruck() {
     if (!regVin.trim()) {
-      setActionError("VIN is required");
+      setRegistrationError("VIN is required");
       return;
     }
     setRegistering(true);
-    setActionError(null);
+    setRegistrationError(null);
     try {
       const truck = await createTruck({
         vin: regVin.trim(),
@@ -97,83 +68,16 @@ export function CapturePage() {
       setRegMake("");
       setRegModel("");
     } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Could not register truck");
+      setRegistrationError(
+        e instanceof Error ? e.message : "Could not register truck"
+      );
     } finally {
       setRegistering(false);
     }
   }
 
-  async function startInspection() {
-    if (!selectedTruckId) return;
-    setStarting(true);
-    setActionError(null);
-    try {
-      const insp = await createInspection(selectedTruckId);
-      setInspectionId(insp.id);
-      setStatus(initialStatus());
-      setAngleIndex(0);
-      setPhase("capture");
-    } catch (e) {
-      setActionError(e instanceof Error ? e.message : "Could not start inspection");
-    } finally {
-      setStarting(false);
-    }
-  }
-
-  async function handleCaptured(blob: Blob, ext: string) {
-    if (!inspectionId) return;
-    const angle = ANGLES[angleIndex];
-    setStatus((s) => ({ ...s, [angle.key]: { state: "uploading", progress: 0 } }));
-    try {
-      await uploadMedia({
-        inspectionId,
-        blob,
-        angle: angle.key,
-        filename: `${angle.key}.${ext}`,
-        onProgress: (f) =>
-          setStatus((s) => ({
-            ...s,
-            [angle.key]: { state: "uploading", progress: f },
-          })),
-      });
-      setStatus((s) => ({ ...s, [angle.key]: { state: "done", progress: 1 } }));
-      if (angleIndex < ANGLES.length - 1) setAngleIndex((i) => i + 1);
-      else await submitInspection();
-    } catch (e) {
-      setStatus((s) => ({
-        ...s,
-        [angle.key]: {
-          state: "error",
-          progress: 0,
-          error: e instanceof Error ? e.message : "Upload failed",
-        },
-      }));
-    }
-  }
-
-  async function submitInspection() {
-    if (!inspectionId || finalizing) return;
-    setFinalizing(true);
-    setActionError(null);
-    try {
-      await finalizeInspection(inspectionId);
-      setPhase("done");
-    } catch (e) {
-      setActionError(
-        e instanceof Error ? e.message : "Could not finalize inspection"
-      );
-    } finally {
-      setFinalizing(false);
-    }
-  }
-
-  function skipAngle() {
-    if (angleIndex < ANGLES.length - 1) setAngleIndex((i) => i + 1);
-    else void submitInspection();
-  }
-
   // ---------- SELECT ----------
-  if (phase === "select") {
+  if (captureSession.phase === "select") {
     return (
       <div className="capture">
         <header className="capture__top">
@@ -250,7 +154,9 @@ export function CapturePage() {
                   value={regModel}
                   onChange={(e) => setRegModel(e.target.value)}
                 />
-                {actionError && <p className="error-note">{actionError}</p>}
+                {registrationError && (
+                  <p className="error-note">{registrationError}</p>
+                )}
                 <div className="btn-row">
                   <button
                     className="primary-btn"
@@ -283,15 +189,17 @@ export function CapturePage() {
                   ))}
                 </select>
 
-                {actionError && <p className="error-note">{actionError}</p>}
+                {captureSession.error && (
+                  <p className="error-note">{captureSession.error}</p>
+                )}
 
                 <div className="btn-row">
                   <button
                     className="primary-btn"
-                    onClick={() => void startInspection()}
-                    disabled={!selectedTruckId || starting}
+                    onClick={() => void captureSession.start(selectedTruckId)}
+                    disabled={!selectedTruckId || captureSession.starting}
                   >
-                    {starting ? "Starting…" : "Start inspection"}
+                    {captureSession.starting ? "Starting…" : "Start inspection"}
                   </button>
                   <Link to="/" className="text-btn">
                     Cancel
@@ -306,8 +214,10 @@ export function CapturePage() {
   }
 
   // ---------- DONE ----------
-  if (phase === "done") {
-    const captured = ANGLES.filter((a) => status[a.key]?.state === "done").length;
+  if (captureSession.phase === "done") {
+    const captured = CAPTURE_ANGLES.filter(
+      (angle) => captureSession.status[angle.key]?.state === "done"
+    ).length;
     return (
       <div className="capture">
         <header className="capture__top">
@@ -324,12 +234,12 @@ export function CapturePage() {
             </div>
             <h2 className="select-card__title">Analysis queued</h2>
             <p className="muted">
-              {captured} of {ANGLES.length} angles uploaded. Conditia is
+              {captured} of {CAPTURE_ANGLES.length} angles uploaded. Conditia is
               extracting frames, detecting damage, and comparing against this
               truck’s history. The report will appear on the dashboard shortly.
             </p>
             <p className="muted mono" style={{ marginTop: 12 }}>
-              Inspection {inspectionId}
+              Inspection {captureSession.inspectionId}
             </p>
             <div className="btn-row">
               <Link to="/" className="primary-btn">
@@ -343,7 +253,7 @@ export function CapturePage() {
   }
 
   // ---------- CAPTURE ----------
-  const angle = ANGLES[angleIndex];
+  const { angle, angleIndex, status, finalizing } = captureSession;
   const current = status[angle.key];
   const uploading = current?.state === "uploading";
 
@@ -355,12 +265,12 @@ export function CapturePage() {
         </Link>
         <span className="capture__title">{angle.label}</span>
         <span className="capture__step mono">
-          {angleIndex + 1}/{ANGLES.length}
+          {angleIndex + 1}/{CAPTURE_ANGLES.length}
         </span>
       </header>
 
       <div className="stepper">
-        {ANGLES.map((a, i) => {
+        {CAPTURE_ANGLES.map((a, i) => {
           const st = status[a.key]?.state;
           const cls =
             st === "done"
@@ -375,15 +285,18 @@ export function CapturePage() {
       <AngleGuide
         key={angle.key}
         angle={angle}
-        onCaptured={(blob, ext) => void handleCaptured(blob, ext)}
+        onCaptured={(blob, ext) => void captureSession.capture(blob, ext)}
         disabled={uploading || finalizing}
       />
 
       <div className="upload-bar">
-        {actionError ? (
+        {captureSession.error ? (
           <div className="upload-bar__label">
-            <span className="error-note">{actionError}</span>
-            <button className="text-btn" onClick={() => void submitInspection()}>
+            <span className="error-note">{captureSession.error}</span>
+            <button
+              className="text-btn"
+              onClick={() => void captureSession.finalize()}
+            >
               Retry submit
             </button>
           </div>
@@ -415,14 +328,14 @@ export function CapturePage() {
         ) : current?.state === "error" ? (
           <div className="upload-bar__label">
             <span className="error-note">{current.error}</span>
-            <button className="text-btn" onClick={skipAngle}>
+            <button className="text-btn" onClick={captureSession.skip}>
               Skip
             </button>
           </div>
         ) : (
           <div className="upload-bar__label">
             <span className="muted">Film this angle, or</span>
-            <button className="text-btn" onClick={skipAngle}>
+            <button className="text-btn" onClick={captureSession.skip}>
               Skip angle
             </button>
           </div>

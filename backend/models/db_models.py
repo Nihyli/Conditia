@@ -1,9 +1,8 @@
 """SQLAlchemy ORM models.
 
-Hardware-agnostic by design: `capture_source` is the only place the system
-records what collected the footage. `drone_flight_id` is NULL for mobile
-captures and populated automatically for drone captures in Phase 5 with no
-schema change. `first_seen_inspection_id` powers change detection.
+`capture_source` records what collected the footage. Only mobile ingestion is
+registered by the current application; other allowed values support imported
+or historical records. `first_seen_inspection_id` powers change detection.
 
 UUIDs are stored as strings so the same models run on SQLite (local dev) and
 Postgres/Supabase (production) without modification.

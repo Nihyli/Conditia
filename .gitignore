@@ -8,6 +8,9 @@ dist-ssr/
 # Python
 __pycache__/
 *.py[cod]
+.coverage
+coverage/
+htmlcov/
 .venv/
 venv/
 *.egg-info/

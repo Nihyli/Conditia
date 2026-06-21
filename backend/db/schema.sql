@@ -32,8 +32,8 @@ CREATE TABLE IF NOT EXISTS trucks (
 );
 
 -- Each inspection event.
--- capture_source: 'mobile' for MVP. 'drone' / 'fixed_camera' are valid future
--- values requiring no schema changes.
+-- Mobile is the only source currently accepted by ingestion. Other values are
+-- retained for imported/historical records.
 CREATE TABLE IF NOT EXISTS inspections (
   id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   truck_id       UUID NOT NULL REFERENCES trucks(id) ON DELETE CASCADE,
@@ -47,9 +47,8 @@ CREATE TABLE IF NOT EXISTS inspections (
   created_by     UUID
 );
 
--- Raw media captured during an inspection.
--- drone_flight_id is NULL for mobile captures; populated automatically for
--- drone captures in Phase 5 — no migration needed.
+-- Raw media captured during an inspection. Source-specific optional metadata
+-- remains nullable for mobile records.
 CREATE TABLE IF NOT EXISTS inspection_media (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   inspection_id   UUID NOT NULL REFERENCES inspections(id) ON DELETE CASCADE,

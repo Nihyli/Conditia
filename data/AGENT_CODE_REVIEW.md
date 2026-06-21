@@ -27,11 +27,11 @@ It is still **not ready for an internet-facing, multi-user production release**.
 - Reviewed all repository source, SQL, migration, configuration, workflow, documentation, and test files; inspected tracked runtime artifacts separately.
 - Searched for hardcoded credentials and unsafe SQL construction. No committed secret value or direct SQL-injection sink was found.
 - `backend/.venv/bin/ruff check .` — passed.
-- `backend/.venv/bin/python -m pytest -q` — **18 passed**.
+- Backend pytest suite — **54 passed**, with an enforced **80% total coverage** floor (currently about 84%).
 - Fresh SQLite `alembic upgrade head` and `alembic check` — passed; no model drift detected for the ORM-managed schema.
 - `backend/.venv/bin/pip check` — passed.
 - `pip-audit -r backend/requirements.txt` — no known vulnerabilities.
-- `npm test` — **3 passed**.
+- Frontend Vitest suite — **43 passed**, exercising every application component; current line coverage is about **95%**.
 - `npm run build` — passed TypeScript checks and the Vite production build.
 - `npm audit --omit=dev` — zero vulnerabilities.
 - `git diff --check` — passed.

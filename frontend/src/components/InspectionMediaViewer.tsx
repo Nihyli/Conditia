@@ -40,10 +40,7 @@ export function InspectionMediaViewer({
     return (
       <div className="media-viewer">
         <p className="muted media-viewer__status">
-          No photos or videos for this inspection. If files exist in{" "}
-          <code>backend/storage/</code>, restart the backend and click
-          Retry on the dashboard, or run{" "}
-          <code>python sync_storage.py</code> in the backend folder.
+          No photos or videos are attached to this inspection.
         </p>
       </div>
     );

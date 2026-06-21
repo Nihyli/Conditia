@@ -5,6 +5,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
+from domain import FindingStatus, InspectionStatus
 from models.db_models import Finding, Inspection, Truck
 from models.schemas import FleetStatsOut
 from security import Principal, require_api_access
@@ -42,7 +43,15 @@ async def fleet_stats(
     inspections_pending_statement = (
         select(func.count())
         .select_from(Inspection)
-        .where(Inspection.status.in_(("uploading", "submitted", "processing")))
+        .where(
+            Inspection.status.in_(
+                (
+                    InspectionStatus.UPLOADING.value,
+                    InspectionStatus.SUBMITTED.value,
+                    InspectionStatus.PROCESSING.value,
+                )
+            )
+        )
     )
     if principal.fleet_id is not None:
         inspections_pending_statement = inspections_pending_statement.join(Truck).where(
@@ -55,7 +64,7 @@ async def fleet_stats(
         .select_from(Inspection)
         .where(
             Inspection.started_at >= today_start,
-            Inspection.status == "complete",
+            Inspection.status == InspectionStatus.COMPLETE.value,
         )
     )
     if principal.fleet_id is not None:
@@ -67,12 +76,19 @@ async def fleet_stats(
     open_findings_statement = (
         select(func.count())
         .select_from(Finding)
-        .where(Finding.status.in_(("open", "acknowledged")))
+        .where(
+            Finding.status.in_(
+                (FindingStatus.OPEN.value, FindingStatus.ACKNOWLEDGED.value)
+            )
+        )
     )
     if principal.fleet_id is not None:
         open_findings_statement = (
-            open_findings_statement.join(Inspection)
-            .join(Truck)
+            open_findings_statement.join(
+                Inspection,
+                Inspection.id == Finding.inspection_id,
+            )
+            .join(Truck, Truck.id == Inspection.truck_id)
             .where(Truck.fleet_id == principal.fleet_id)
         )
     open_findings = await db.scalar(open_findings_statement) or 0

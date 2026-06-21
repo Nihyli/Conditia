@@ -1169,3 +1169,71 @@ button {
 .dashboard-alert .primary-btn {
   margin-top: var(--space-16);
 }
+
+/* ---------- Data table (trucks, findings views) ---------- */
+
+.data-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.data-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+  padding: var(--space-16) var(--space-20);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  width: 100%;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  font: inherit;
+  color: inherit;
+}
+
+.data-row:last-child {
+  border-bottom: none;
+}
+
+.data-row--clickable {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.data-row--clickable:hover {
+  background: var(--surface-hover);
+}
+
+.data-row__primary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.data-row__label {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.data-row__sub {
+  font-size: 13px;
+  color: var(--text-3);
+}
+
+.data-row__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.data-row .sev {
+  align-self: flex-start;
+  margin-bottom: var(--space-4);
+}

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { getFleetStats, getInspections } from "../api";
+import { getFleetStats, getInspections, getTrucks, type ApiTruck } from "../api";
 import { Sidebar } from "../components/Sidebar";
 import { Topbar } from "../components/Topbar";
 import { StatCards } from "../components/StatCards";
 import { RecentInspections } from "../components/RecentInspections";
 import { DamageMap } from "../components/DamageMap";
 import { mapFleetStats, mapInspectionSummary } from "../mapInspection";
+import { FindingsView } from "../views/FindingsView";
+import { PlaceholderView } from "../views/PlaceholderView";
+import { TrucksView } from "../views/TrucksView";
 import type { FleetStat, Inspection } from "../types";
 import { IconRefresh } from "../components/icons";
 
@@ -26,6 +29,7 @@ const POLL_MS = 5000;
 export function DashboardPage() {
   const [activeNav, setActiveNav] = useState("overview");
   const [inspections, setInspections] = useState<Inspection[]>([]);
+  const [trucks, setTrucks] = useState<ApiTruck[]>([]);
   const [stats, setStats] = useState<FleetStat[]>([]);
   const [activeInspectionId, setActiveInspectionId] = useState<string | null>(
     null
@@ -34,31 +38,37 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const pollRef = useRef<number | null>(null);
 
+  const goToInspection = useCallback((id: string) => {
+    setActiveNav("inspections");
+    setActiveInspectionId(id);
+  }, []);
+
   const load = useCallback(async () => {
     try {
-      const inspRows = await getInspections();
+      const [inspRows, truckRows] = await Promise.all([
+        getInspections(),
+        getTrucks().catch(() => [] as ApiTruck[]),
+      ]);
       const mapped = inspRows.map(mapInspectionSummary);
 
       let statsRow;
       try {
         statsRow = await getFleetStats();
       } catch {
-        // Fallback if /fleet/stats is missing (old backend) — derive from inspections.
         statsRow = {
           active_trucks: new Set(inspRows.map((i) => i.truck_id)).size,
           inspections_today: inspRows.filter((i) => {
             const d = new Date(i.started_at);
-            const now = new Date();
-            return d.toDateString() === now.toDateString();
+            return d.toDateString() === new Date().toDateString();
           }).length,
           inspections_pending: inspRows.filter(
             (i) => i.status === "pending" || i.status === "processing"
           ).length,
           inspections_complete_today: inspRows.filter((i) => {
             const d = new Date(i.started_at);
-            const now = new Date();
             return (
-              d.toDateString() === now.toDateString() && i.status === "complete"
+              d.toDateString() === new Date().toDateString() &&
+              i.status === "complete"
             );
           }).length,
           open_findings: inspRows.reduce((n, i) => n + i.finding_count, 0),
@@ -66,6 +76,7 @@ export function DashboardPage() {
       }
 
       setInspections(mapped);
+      setTrucks(truckRows);
       setStats(mapFleetStats(statsRow));
       setError(null);
 
@@ -85,7 +96,6 @@ export function DashboardPage() {
     void load();
   }, [load]);
 
-  // Poll while any inspection is still processing.
   useEffect(() => {
     const needsPoll = inspections.some(
       (i) => i.status === "pending" || i.status === "processing"
@@ -112,9 +122,96 @@ export function DashboardPage() {
     inspections.find((i) => i.id === activeInspectionId) ?? null;
 
   const truckBadge =
-    stats.find((s) => s.id === "active")?.value !== "0"
-      ? Number(stats.find((s) => s.id === "active")?.value)
-      : undefined;
+    trucks.length > 0
+      ? trucks.length
+      : stats.find((s) => s.id === "active")?.value !== "0"
+        ? Number(stats.find((s) => s.id === "active")?.value)
+        : undefined;
+
+  const inspectionPanel =
+    inspections.length === 0 ? (
+      <div className="panel">
+        <div className="empty">
+          <div className="empty__title">No inspections yet</div>
+          <p className="muted">
+            Register a truck, then run your first guided walk-around.
+          </p>
+          <Link to="/capture" className="primary-btn" style={{ marginTop: 16 }}>
+            Start first inspection
+          </Link>
+        </div>
+      </div>
+    ) : (
+      <div className="work">
+        <RecentInspections
+          inspections={inspections}
+          activeId={activeInspectionId ?? ""}
+          onSelect={setActiveInspectionId}
+        />
+        {activeInspection ? (
+          <DamageMap inspection={activeInspection} />
+        ) : null}
+      </div>
+    );
+
+  function renderContent() {
+    switch (activeNav) {
+      case "overview":
+        return (
+          <>
+            <StatCards stats={stats} />
+            {inspectionPanel}
+          </>
+        );
+      case "inspections":
+        return inspectionPanel;
+      case "trucks":
+        return (
+          <TrucksView
+            trucks={trucks}
+            inspections={inspections}
+            onSelectInspection={goToInspection}
+          />
+        );
+      case "findings":
+        return (
+          <FindingsView
+            inspections={inspections}
+            onSelectInspection={goToInspection}
+          />
+        );
+      case "reports":
+        return (
+          <PlaceholderView
+            title="Reports"
+            description="PDF export and scheduled fleet reports are coming in the next release."
+          />
+        );
+      case "history":
+        return (
+          <PlaceholderView
+            title="Inspection history"
+            description="Full historical timeline and comparison tools are coming soon."
+          />
+        );
+      case "samsara":
+        return (
+          <PlaceholderView
+            title="Samsara integration"
+            description="Connect your Samsara telematics account to sync fleet data. Planned for post-MVP."
+          />
+        );
+      case "settings":
+        return (
+          <PlaceholderView
+            title="Settings"
+            description="Fleet preferences, user management, and API keys will live here."
+          />
+        );
+      default:
+        return inspectionPanel;
+    }
+  }
 
   return (
     <div className="app">
@@ -133,13 +230,9 @@ export function DashboardPage() {
               <p className="error-note">Could not load fleet data.</p>
               <p className="muted">{error}</p>
               <p className="muted">
-                Backend should be running at{" "}
-                <code>http://localhost:8000</code> (dev proxy:{" "}
-                <code>/api</code>). Check{" "}
-                <a href="http://localhost:8000/docs" target="_blank" rel="noreferrer">
-                  /docs
-                </a>{" "}
-                — if <code>/fleet/stats</code> is missing, restart the backend.
+                Backend should be on port <code>8001</code> (frontend proxy:{" "}
+                <code>/api</code> → 8001). Verify:{" "}
+                <code>Invoke-RestMethod http://127.0.0.1:8001/health</code>
               </p>
               <button className="primary-btn" onClick={() => void load()}>
                 <IconRefresh size={16} />
@@ -149,35 +242,7 @@ export function DashboardPage() {
           ) : loading ? (
             <p className="muted">Loading fleet data…</p>
           ) : (
-            <>
-              <StatCards stats={stats} />
-
-              {inspections.length === 0 ? (
-                <div className="panel">
-                  <div className="empty">
-                    <div className="empty__title">No inspections yet</div>
-                    <p className="muted">
-                      Register a truck, then run your first guided walk-around.
-                      Uploaded footage appears here once analysis completes.
-                    </p>
-                    <Link to="/capture" className="primary-btn" style={{ marginTop: 16 }}>
-                      Start first inspection
-                    </Link>
-                  </div>
-                </div>
-              ) : (
-                <div className="work">
-                  <RecentInspections
-                    inspections={inspections}
-                    activeId={activeInspectionId ?? ""}
-                    onSelect={setActiveInspectionId}
-                  />
-                  {activeInspection ? (
-                    <DamageMap inspection={activeInspection} />
-                  ) : null}
-                </div>
-              )}
-            </>
+            renderContent()
           )}
         </main>
       </div>

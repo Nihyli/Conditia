@@ -38,9 +38,9 @@ const sevRank: Record<Severity, number> = {
 };
 
 const zoneCaption: Record<DamageZone, string> = {
-  front: "front",
+  front: "cab front",
   cab: "cab",
-  trailer_front: "front",
+  trailer_front: "trailer front",
   trailer_mid: "side",
   trailer_rear: "rear",
   passenger_side: "side",
@@ -54,10 +54,22 @@ const API_ZONE_TO_DISPLAY: Record<DamageZone, DisplayZone> = {
   trailer_rear: "rear",
   trailer_mid: "side",
   trailer_front: "front",
-  front: "front",
+  // Cab bumper, headlight, grille — not the trailer nose
+  front: "cab",
   cab: "cab",
   passenger_side: "side",
   driver_side: "side",
+};
+
+/** Pin markers on the silhouette (side profile, cab facing right). */
+const ZONE_MARKER: Record<DamageZone, { cx: number; cy: number }> = {
+  trailer_rear: { cx: 60, cy: 105 },
+  trailer_mid: { cx: 194, cy: 105 },
+  trailer_front: { cx: 318, cy: 105 },
+  front: { cx: 520, cy: 122 },
+  cab: { cx: 400, cy: 100 },
+  passenger_side: { cx: 150, cy: 105 },
+  driver_side: { cx: 230, cy: 105 },
 };
 
 const zoneBoxes: { zone: DisplayZone; x: number; w: number; cx: number }[] = [
@@ -76,6 +88,48 @@ function zoneSeverity(findings: Finding[], zone: DisplayZone): Severity | null {
   return inZone.reduce<Severity>(
     (worst, f) => (sevRank[f.severity] > sevRank[worst] ? f.severity : worst),
     "clear"
+  );
+}
+
+function apiZoneSeverity(findings: Finding[], zone: DamageZone): Severity | null {
+  const inZone = findings.filter((f) => f.zone === zone);
+  if (inZone.length === 0) return null;
+  return inZone.reduce<Severity>(
+    (worst, f) => (sevRank[f.severity] > sevRank[worst] ? f.severity : worst),
+    "clear"
+  );
+}
+
+/** One marker per API zone — worst severity wins if multiple findings share a zone. */
+function worstFindingByZone(findings: Finding[]): Map<DamageZone, Finding> {
+  const map = new Map<DamageZone, Finding>();
+  for (const f of findings) {
+    const current = map.get(f.zone);
+    if (!current || sevRank[f.severity] > sevRank[current.severity]) {
+      map.set(f.zone, f);
+    }
+  }
+  return map;
+}
+
+function SeverityMarker({ cx, cy, sev }: { cx: number; cy: number; sev: Severity }) {
+  return (
+    <g>
+      <circle cx={cx} cy={cy} r={17} fill={sevColor[sev]} opacity={0.15} />
+      <circle cx={cx} cy={cy} r={13} fill={sevColor[sev]} />
+      <circle
+        cx={cx}
+        cy={cy}
+        r={17}
+        fill="none"
+        stroke={sevColor[sev]}
+        strokeWidth={1.5}
+        opacity={0.35}
+      />
+      <text x={cx} y={cy + 5} textAnchor="middle" fontSize={15} fontWeight={800} fill="white">
+        !
+      </text>
+    </g>
   );
 }
 
@@ -98,15 +152,10 @@ function ChangeLine({ ago }: { ago: number }) {
 
 function TruckSilhouette({ findings }: { findings: Finding[] }) {
   const cabSev = zoneSeverity(findings, "cab");
+  const frontSev = apiZoneSeverity(findings, "front");
 
   return (
     <svg className="dmap__svg" viewBox="0 0 560 210" role="img" aria-label="Truck damage map">
-      <defs>
-        <clipPath id="cab-clip">
-          <path d={CAB_PATH} />
-        </clipPath>
-      </defs>
-
       {/* Zone tints — trailer regions */}
       {zoneBoxes
         .filter((z) => z.zone !== "cab")
@@ -127,24 +176,6 @@ function TruckSilhouette({ findings }: { findings: Finding[] }) {
             />
           );
         })}
-
-      {/* Cab zone tint — clipped to cab shape */}
-      <rect
-        x={355}
-        y={54}
-        width={180}
-        height={100}
-        fill={cabSev ? sevFill[cabSev] : "var(--surface-2)"}
-        clipPath="url(#cab-clip)"
-        opacity={cabSev ? 0.7 : 0.4}
-      />
-      <path
-        d={CAB_PATH}
-        fill="none"
-        stroke={cabSev ? sevColor[cabSev] : "var(--border)"}
-        strokeWidth={cabSev ? 1.5 : 1}
-        opacity={cabSev ? 0.6 : 0.4}
-      />
 
       {/* Trailer outline */}
       <rect
@@ -173,12 +204,12 @@ function TruckSilhouette({ findings }: { findings: Finding[] }) {
       <ellipse cx={362.5} cy={30} rx={5} ry={3} fill="var(--border-strong)" opacity={0.3} />
       <ellipse cx={372.5} cy={24} rx={5} ry={3} fill="var(--border-strong)" opacity={0.3} />
 
-      {/* Cab body */}
+      {/* Cab body — severity fill matches trailer zone tints */}
       <path
         d={CAB_PATH}
-        fill="var(--surface-2)"
-        stroke="var(--border-strong)"
-        strokeWidth={2}
+        fill={cabSev ? sevFill[cabSev] : "var(--surface-2)"}
+        stroke={cabSev ? sevColor[cabSev] : "var(--border-strong)"}
+        strokeWidth={cabSev ? 1.5 : 2}
         strokeLinejoin="round"
       />
 
@@ -235,17 +266,17 @@ function TruckSilhouette({ findings }: { findings: Finding[] }) {
         opacity={0.6}
       />
 
-      {/* Headlight */}
+      {/* Headlight — highlights when zone=front has a finding */}
       <rect
         x={514}
         y={118}
         width={12}
         height={8}
         rx={2}
-        fill="var(--med-bg)"
-        stroke="var(--med)"
-        strokeWidth={1}
-        opacity={0.7}
+        fill={frontSev ? sevFill[frontSev] : "var(--med-bg)"}
+        stroke={frontSev ? sevColor[frontSev] : "var(--med)"}
+        strokeWidth={frontSev ? 1.5 : 1}
+        opacity={1}
       />
 
       {/* Fuel tank */}
@@ -276,27 +307,16 @@ function TruckSilhouette({ findings }: { findings: Finding[] }) {
         </g>
       ))}
 
-      {/* Severity markers */}
-      {zoneBoxes.map(({ zone, cx }) => {
-        const sev = zoneSeverity(findings, zone);
-        if (!sev) return null;
+      {/* Severity markers — pinned per API zone (headlight at cab front) */}
+      {[...worstFindingByZone(findings).entries()].map(([zone, finding]) => {
+        const pos = ZONE_MARKER[zone];
         return (
-          <g key={`m-${zone}`}>
-            <circle cx={cx} cy={105} r={17} fill={sevColor[sev]} opacity={0.15} />
-            <circle cx={cx} cy={105} r={13} fill={sevColor[sev]} />
-            <circle
-              cx={cx}
-              cy={105}
-              r={17}
-              fill="none"
-              stroke={sevColor[sev]}
-              strokeWidth={1.5}
-              opacity={0.35}
-            />
-            <text x={cx} y={110} textAnchor="middle" fontSize={15} fontWeight={800} fill="white">
-              !
-            </text>
-          </g>
+          <SeverityMarker
+            key={`m-${zone}-${finding.id}`}
+            cx={pos.cx}
+            cy={pos.cy}
+            sev={finding.severity}
+          />
         );
       })}
     </svg>

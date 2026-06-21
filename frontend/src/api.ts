@@ -52,6 +52,38 @@ export interface ApiFleetStats {
   open_findings: number;
 }
 
+export interface ApiDataStatus {
+  fleets: number;
+  trucks: number;
+  inspections: number;
+  findings: number;
+  media: number;
+  reports: number;
+  storage_files: number;
+  has_data: boolean;
+  demo_fleet_name: string | null;
+}
+
+export interface ApiSeedResult {
+  seeded: boolean;
+  message: string;
+  counts?: ApiDataStatus;
+}
+
+export interface ApiUnseedResult {
+  cleared: boolean;
+  message: string;
+  cleared_counts: {
+    fleets: number;
+    trucks: number;
+    inspections: number;
+    findings: number;
+    media: number;
+    reports: number;
+    storage_files: number;
+  };
+}
+
 export interface ApiInspection {
   id: string;
   truck_id: string;
@@ -83,6 +115,26 @@ async function getJson<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function postJson<T>(
+  path: string,
+  query?: Record<string, boolean>
+): Promise<T> {
+  const qs =
+    query && Object.keys(query).length > 0
+      ? `?${new URLSearchParams(
+          Object.fromEntries(
+            Object.entries(query).map(([k, v]) => [k, String(v)])
+          )
+        )}`
+      : "";
+  const res = await fetch(`${API_BASE}${path}${qs}`, { method: "POST" });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(detail || `POST ${path} failed: ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
 export function getTrucks(): Promise<ApiTruck[]> {
   return getJson<ApiTruck[]>("/trucks");
 }
@@ -108,6 +160,20 @@ export function mediaUrl(storagePath: string): string {
 
 export function getFleetStats(): Promise<ApiFleetStats> {
   return getJson<ApiFleetStats>("/fleet/stats");
+}
+
+export function getDataStatus(): Promise<ApiDataStatus> {
+  return getJson<ApiDataStatus>("/admin/data-status");
+}
+
+export function seedDemoData(force = false): Promise<ApiSeedResult> {
+  return postJson<ApiSeedResult>("/admin/seed", { force });
+}
+
+export function unseedAllData(clearStorage = true): Promise<ApiUnseedResult> {
+  return postJson<ApiUnseedResult>("/admin/unseed", {
+    clear_storage: clearStorage,
+  });
 }
 
 export async function createTruck(payload: TruckCreatePayload): Promise<ApiTruck> {

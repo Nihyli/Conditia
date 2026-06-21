@@ -120,3 +120,41 @@ class FleetStatsOut(BaseModel):
     inspections_pending: int
     inspections_complete_today: int
     open_findings: int
+
+
+class DataCountsOut(BaseModel):
+    fleets: int
+    trucks: int
+    inspections: int
+    findings: int
+    media: int
+    reports: int
+    storage_files: int = 0
+    has_data: bool = False
+    demo_fleet_name: str | None = None
+
+
+class SeedResultOut(BaseModel):
+    seeded: bool
+    message: str
+    counts: DataCountsOut | None = None
+
+
+class ClearedCountsOut(BaseModel):
+    fleets: int
+    trucks: int
+    inspections: int
+    findings: int
+    media: int
+    reports: int
+    storage_files: int
+
+
+class UnseedResultOut(BaseModel):
+    cleared: bool
+    message: str
+    cleared_counts: ClearedCountsOut
+
+
+class DataStatusOut(DataCountsOut):
+    pass

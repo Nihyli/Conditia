@@ -9,6 +9,7 @@ import { DamageMap } from "../components/DamageMap";
 import { mapFleetStats, mapInspectionSummary } from "../mapInspection";
 import { FindingsView } from "../views/FindingsView";
 import { PlaceholderView } from "../views/PlaceholderView";
+import { SettingsView } from "../views/SettingsView";
 import { TrucksView } from "../views/TrucksView";
 import type { FleetStat, Inspection } from "../types";
 import { IconRefresh } from "../components/icons";
@@ -202,12 +203,7 @@ export function DashboardPage() {
           />
         );
       case "settings":
-        return (
-          <PlaceholderView
-            title="Settings"
-            description="Fleet preferences, user management, and API keys will live here."
-          />
-        );
+        return <SettingsView onDataChanged={() => void load()} />;
       default:
         return inspectionPanel;
     }

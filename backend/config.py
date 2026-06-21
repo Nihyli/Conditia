@@ -18,6 +18,9 @@ class Settings(BaseSettings):
 
     seed_on_startup: bool = False
 
+    # Allow POST /admin/seed and /admin/unseed (disable in production).
+    admin_enabled: bool = True
+
     supabase_url: str | None = None
     supabase_key: str | None = None
     google_application_credentials: str | None = None

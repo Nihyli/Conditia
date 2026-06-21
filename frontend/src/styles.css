@@ -851,6 +851,91 @@ button {
   cursor: default;
 }
 
+.danger-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  padding: var(--space-10) var(--space-16);
+  border-radius: var(--radius-md);
+  border: 1px solid oklch(0.55 0.18 25 / 0.35);
+  background: oklch(0.97 0.02 25);
+  color: oklch(0.45 0.18 25);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.danger-btn:hover:not(:disabled) {
+  background: oklch(0.94 0.04 25);
+  border-color: oklch(0.55 0.18 25 / 0.55);
+}
+
+.danger-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ---------- Settings ---------- */
+
+.settings__body {
+  padding: var(--space-16) var(--space-20) var(--space-24);
+}
+
+.settings__lead {
+  margin: 0 0 var(--space-20);
+  max-width: 52ch;
+}
+
+.settings__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-12);
+  margin: 0 0 var(--space-20);
+}
+
+.settings__stats div {
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.settings__stats dt {
+  font-size: 12px;
+  color: var(--text-3);
+  margin-bottom: var(--space-4);
+}
+
+.settings__stats dd {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+}
+
+.settings__message {
+  margin: 0 0 var(--space-12);
+  padding: var(--space-10) var(--space-12);
+  border-radius: var(--radius-md);
+  background: var(--clear-bg);
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.settings__hint {
+  margin: var(--space-12) 0 0;
+  font-size: 13px;
+  max-width: 56ch;
+}
+
 /* ============================================================
    Mobile capture flow (phone-first, large touch targets)
    ============================================================ */

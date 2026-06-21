@@ -10,7 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models.db_models import Finding, Report
 
 
-async def generate(db: AsyncSession, inspection_id: str) -> Report:
+async def generate(
+    db: AsyncSession,
+    inspection_id: str,
+    *,
+    requires_human_review: bool = False,
+) -> Report:
     result = await db.execute(
         select(Finding).where(Finding.inspection_id == inspection_id)
     )
@@ -19,7 +24,17 @@ async def generate(db: AsyncSession, inspection_id: str) -> Report:
     total = len(findings)
     critical = sum(1 for f in findings if f.severity in ("critical", "high"))
 
-    if total == 0:
+    if requires_human_review and total == 0:
+        summary = (
+            "Automated triage finished, but manual review is required. "
+            "No clear result was issued."
+        )
+    elif requires_human_review:
+        summary = (
+            f"Automated triage produced {total} provisional finding"
+            f"{'' if total == 1 else 's'}. Manual review is required."
+        )
+    elif total == 0:
         summary = "Inspection complete. No findings detected."
     else:
         summary = (
@@ -32,6 +47,7 @@ async def generate(db: AsyncSession, inspection_id: str) -> Report:
         "inspection_id": inspection_id,
         "total_findings": total,
         "critical_findings": critical,
+        "requires_human_review": requires_human_review,
         "findings": [
             {
                 "id": f.id,
@@ -39,6 +55,7 @@ async def generate(db: AsyncSession, inspection_id: str) -> Report:
                 "type": f.finding_type,
                 "severity": f.severity,
                 "confidence": f.confidence,
+                "status": f.status,
                 "zone": f.zone,
                 "location": f.location,
                 "first_seen_inspection_id": f.first_seen_inspection_id,
@@ -61,6 +78,5 @@ async def generate(db: AsyncSession, inspection_id: str) -> Report:
     report.critical_findings = critical
     report.raw_json = raw_json
 
-    await db.commit()
-    await db.refresh(report)
+    await db.flush()
     return report

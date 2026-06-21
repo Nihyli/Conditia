@@ -1,4 +1,4 @@
-# Start Conditia API — kills anything on port 8000 first, then starts v0.2.0
+# Start Conditia API — stops the development listener, then starts v0.3.0
 $ErrorActionPreference = "SilentlyContinue"
 
 Write-Host "Stopping processes on port 8001..."

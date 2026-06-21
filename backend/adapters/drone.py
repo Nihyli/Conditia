@@ -1,6 +1,6 @@
 from fastapi import UploadFile
 
-from adapters.base import CaptureAdapter
+from adapters.base import CaptureAdapter, CaptureMetadata, StoredMedia
 
 
 class DroneAdapter(CaptureAdapter):
@@ -22,6 +22,6 @@ class DroneAdapter(CaptureAdapter):
         inspection_id: str,
         files: list[UploadFile],
         capture_angle: str,
-        metadata: dict,
-    ) -> list[str]:
+        metadata: CaptureMetadata,
+    ) -> list[StoredMedia]:
         raise NotImplementedError("Drone adapter -- Phase 5")

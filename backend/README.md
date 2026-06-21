@@ -1,69 +1,110 @@
-# Conditia — Backend
+# Conditia backend
 
-FastAPI ingestion + analysis pipeline. Hardware-agnostic by design: every
-capture source (mobile today; drone / fixed-camera later) implements one
-adapter and flows through the identical analysis pipeline.
+FastAPI ingestion and analysis service. Mobile capture is implemented; drone
+and fixed-camera adapters remain future capabilities.
 
-## Run it (zero external setup)
+## Run locally
 
-Defaults to local SQLite + on-disk media storage, so it runs with no Supabase,
-no Google Cloud, no Postgres.
-
-```powershell
-cd C:\Users\yhail\Projects\conditia\backend
+```bash
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn main:app --reload --port 8000
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8001
 ```
 
-- API docs (Swagger): http://localhost:8000/docs
-- Health: http://localhost:8000/health
-- On first start it seeds the demo "Midwest Freight Co." fleet (matches the dashboard).
+- API docs: http://127.0.0.1:8001/docs
+- Health: http://127.0.0.1:8001/health
+- Database readiness: http://127.0.0.1:8001/ready
+- Demo seeding: off unless `SEED_ON_STARTUP=true`
 
-## Architecture
+Copy `.env.example` to `.env` for overrides. Local development uses SQLite and
+private on-disk storage rooted at `backend/storage`.
 
+## Upload and analysis flow
+
+```text
+POST /inspections
+  -> status=uploading
+POST /inspections/{id}/upload (repeat as needed)
+  -> verify signature and quota
+  -> generate an opaque contained storage key
+  -> persist media metadata; status remains uploading
+POST /inspections/{id}/finalize
+  -> status=submitted
+  -> enqueue one analysis task
+analysis claim
+  -> submitted -> processing (atomic compare/update)
+  -> frames -> detector -> change matching -> report
+  -> complete | review_required | failed
 ```
-adapters/      base.py (abstract) + mobile.py (MVP) + drone.py (Phase 5 stub)
-services/      storage, vision (Google Vision optional / stubbed), analysis
-               pipeline, change_detection, report_generator
-routers/       trucks, inspections, findings, reports
-models/        db_models.py (SQLAlchemy ORM) + schemas.py (Pydantic)
-db/schema.sql  canonical Postgres/Supabase DDL for production
-```
 
-### Upload flow (the MVP slice)
+The in-process background task is appropriate for local development. A durable
+queue/outbox and isolated worker are still required for production retries and
+crash recovery.
 
-```
-POST /inspections/{id}/upload  (multipart: files, capture_angle, capture_source)
-  -> adapter.receive_media() stores media          (MobileAdapter -> disk)
-  -> inspection_media rows written
-  -> background task: analyze_inspection()
-       extract frames -> detect_damage -> change detection
-       -> findings written -> report generated -> status=complete
-```
-
-## Key endpoints
+## Main endpoints
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/trucks` | Register a truck |
-| GET  | `/trucks/{id}/inspections` | Truck inspection history |
-| POST | `/inspections` | Start an inspection |
-| POST | `/inspections/{id}/upload` | Upload media (any capture source) |
-| GET  | `/inspections` | Recent inspections (dashboard feed) |
-| GET  | `/inspections/{id}` | Inspection + findings (damage map) |
-| GET  | `/inspections/{id}/report` | Generated report |
+| POST | `/trucks` | Register a validated truck/VIN |
+| GET | `/trucks` | List trucks (bounded and fleet-scoped) |
+| POST | `/inspections` | Create an uploading inspection |
+| POST | `/inspections/{id}/upload` | Upload verified media |
+| POST | `/inspections/{id}/finalize` | Submit once for analysis |
+| GET | `/inspections` | Bounded inspection summaries |
+| GET | `/inspections/{id}` | Inspection, findings, and media |
+| GET | `/reports/{inspection_id}` | Structured report, when generated |
 
-## Going to production (Supabase)
+## Security configuration
 
-1. Run `db/schema.sql` in the Supabase SQL editor.
-2. Set `DATABASE_URL=postgresql+asyncpg://...` and uncomment `asyncpg` in `requirements.txt`.
-3. (Optional) Set `GOOGLE_APPLICATION_CREDENTIALS` + uncomment `google-cloud-vision`
-   to switch detection from stub to real, and `opencv-python-headless` for video frames.
-4. Swap `LocalStorageService` for a Supabase Storage implementation (same interface).
+Development defaults to `AUTH_MODE=disabled`. Production requires:
 
-Detection is intentionally stubbed by default (returns no findings) so the full
-pipeline runs anywhere; the seeded demo fleet provides realistic findings for
-the dashboard. Real detection accuracy is the Phase 2/3 focus (see the technical
-writeup).
+```dotenv
+ENVIRONMENT=production
+AUTH_MODE=api_key
+API_KEY=<at-least-32-random-characters>
+API_FLEET_ID=<fleet UUID assigned to this deployment>
+STORAGE_BACKEND=supabase
+SUPABASE_URL=https://<project>.supabase.co
+SUPABASE_KEY=<server-side service role key>
+SUPABASE_STORAGE_BUCKET=inspection-media
+DOCS_ENABLED=false
+CORS_ORIGINS=https://fleet.example.com
+```
+
+Clients send the perimeter key as `X-API-Key`. This mode scopes data queries to
+one configured fleet, but does not provide per-user identity or roles. Put a
+fleet-aware identity gateway in front of the service before multi-tenant use.
+Production uses a private object bucket and short-lived authorized redirects;
+the application no longer exposes a static storage-directory mount.
+
+Uploads are signature checked, server-renamed, path-contained, streamed on a
+worker thread, and bounded by `MAX_UPLOAD_BYTES` and
+`MAX_FILES_PER_UPLOAD`. Gateway-level request/rate limits are still required.
+
+## Database and migrations
+
+The ORM and initial Alembic migration contain application constraints. Verify a
+fresh database with:
+
+```bash
+DATABASE_URL=sqlite+aiosqlite:////tmp/conditia.db alembic upgrade head
+DATABASE_URL=sqlite+aiosqlite:////tmp/conditia.db alembic check
+```
+
+For an existing pre-Alembic database, back it up and review/stamp/migrate it
+explicitly; do not blindly run the initial migration over existing tables. The
+prototype compatibility path is `alembic stamp 0001_initial` followed by
+`alembic upgrade head` after the backup and schema have been verified.
+Revision `0003_normalize_legacy_sqlite_uuids` also normalizes prototype SQLite
+UUID text without deleting rows so ORM relationships continue to resolve.
+`db/schema.sql` includes the additional Supabase membership/RLS policies.
+
+## Analysis integrity
+
+No detector or decoder failure is converted into a clear report. Missing
+capability and experimental Google label detection produce `review_required`.
+The Google integration is only a triage signal: its confidence is retained, but
+its provisional severity requires human review. A validated damage model,
+calibrated severity policy, and durable job infrastructure remain production
+prerequisites.

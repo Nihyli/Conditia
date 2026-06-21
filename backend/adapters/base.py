@@ -1,6 +1,22 @@
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 from fastapi import UploadFile
+
+
+@dataclass(frozen=True)
+class CaptureMetadata:
+    gps_lat: float | None = None
+    gps_lng: float | None = None
+    drone_flight_id: str | None = None
+
+
+@dataclass(frozen=True)
+class StoredMedia:
+    storage_path: str
+    media_type: str
+    content_type: str
+    size_bytes: int
 
 
 class CaptureAdapter(ABC):
@@ -17,13 +33,11 @@ class CaptureAdapter(ABC):
         inspection_id: str,
         files: list[UploadFile],
         capture_angle: str,
-        metadata: dict,
-    ) -> list[str]:
+        metadata: CaptureMetadata,
+    ) -> list[StoredMedia]:
         """Accept raw media, store it, return storage paths.
 
-        `metadata` holds source-specific fields:
-          - mobile: { gps_lat, gps_lng }
-          - drone:  { drone_flight_id, gps_lat, gps_lng, altitude, heading }
+        Return application-owned storage keys and verified media metadata.
         """
         raise NotImplementedError
 

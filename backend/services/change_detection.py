@@ -23,25 +23,27 @@ async def find_first_occurrence(
     this finding (same type + zone) was first seen. Defaults to the current
     inspection if it has never been seen before (i.e. it is new).
     """
-    result = await db.execute(
-        select(Inspection)
-        .where(Inspection.truck_id == truck_id)
-        .where(Inspection.id != current_inspection_id)
-        .order_by(Inspection.started_at.asc())
+    current_started_at = (
+        select(Inspection.started_at)
+        .where(Inspection.id == current_inspection_id)
+        .scalar_subquery()
     )
-    previous = result.scalars().all()
+    # An unlocalized label is not a stable defect identity. Treat it as new
+    # rather than attributing unrelated damage to the same historical event.
+    if zone is None:
+        return current_inspection_id
 
-    first_seen = current_inspection_id
-    for inspection in previous:
-        match = await db.execute(
-            select(Finding.id)
-            .where(Finding.inspection_id == inspection.id)
-            .where(Finding.finding_type == finding_type)
-            .where(Finding.zone == zone)
-            .limit(1)
+    result = await db.execute(
+        select(Inspection.id)
+        .join(Finding, Finding.inspection_id == Inspection.id)
+        .where(
+            Inspection.truck_id == truck_id,
+            Inspection.started_at < current_started_at,
+            Inspection.status.in_(("complete", "review_required")),
+            Finding.finding_type == finding_type,
+            Finding.zone == zone,
         )
-        if match.scalar_one_or_none() is not None:
-            first_seen = inspection.id
-            break
-
-    return first_seen
+        .order_by(Inspection.started_at.asc())
+        .limit(1)
+    )
+    return result.scalar_one_or_none() or current_inspection_id

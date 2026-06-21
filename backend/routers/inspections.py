@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from fastapi import (
     APIRouter,
     BackgroundTasks,
@@ -5,15 +7,19 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     UploadFile,
 )
-from sqlalchemy import select
+from sqlalchemy import func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from adapters.drone import DroneAdapter
-from adapters.mobile import MobileAdapter
+from adapters.base import CaptureMetadata
+from adapters.registry import get_capture_adapter
+from config import settings
 from database import get_db
-from models.db_models import Finding, Inspection, InspectionMedia, Truck
+from domain import CaptureAngle, IngestibleCaptureSource, InspectionStatus
+from models.db_models import AnalysisJob, Finding, Inspection, InspectionMedia, Truck
 from models.schemas import (
     FindingOut,
     InspectionCreate,
@@ -22,92 +28,41 @@ from models.schemas import (
     MediaOut,
     UploadResult,
 )
-from services.analysis import analyze_inspection
-from services.inspection_history import inspections_since_first_seen
-from services.media_sync import get_inspection_media_rows, sync_inspection_media_from_disk
-from utils import worst_severity
+from security import Principal, require_api_access
+from services.analysis_jobs import run_analysis_job
+from services.inspection_queries import build_inspection_summaries
+from services.storage import StorageError, storage_service
 
 router = APIRouter(prefix="/inspections", tags=["inspections"])
 
-# Adapter registry. Adding a capture source = registering an adapter here.
-ADAPTERS = {
-    "mobile": MobileAdapter(),
-    "drone": DroneAdapter(),  # stubbed -> 501 until Phase 5
-}
-
-VIDEO_EXTS = (".mp4", ".mov", ".webm", ".avi")
-
-
-def _truck_label(truck: Truck | None) -> str:
-    if truck is None:
-        return "Unknown truck"
-    plate = truck.license_plate
-    return plate or truck.vin
-
-
-async def _build_summary(db: AsyncSession, inspection: Inspection) -> InspectionSummary:
-    truck = await db.get(Truck, inspection.truck_id)
-    result = await db.execute(
-        select(Finding).where(Finding.inspection_id == inspection.id)
-    )
-    findings = result.scalars().all()
-
-    media_result = await db.execute(
-        select(InspectionMedia)
-        .where(InspectionMedia.inspection_id == inspection.id)
-        .order_by(InspectionMedia.captured_at.asc())
-    )
-    media_items = list(media_result.scalars().all())
-    if not media_items:
-        await sync_inspection_media_from_disk(db, inspection.id)
-        media_result = await db.execute(
-            select(InspectionMedia)
-            .where(InspectionMedia.inspection_id == inspection.id)
-            .order_by(InspectionMedia.captured_at.asc())
-        )
-        media_items = list(media_result.scalars().all())
-
-    finding_outs: list[FindingOut] = []
-    for f in findings:
-        ago = await inspections_since_first_seen(
-            db=db,
-            truck_id=inspection.truck_id,
-            current_inspection_id=inspection.id,
-            first_seen_inspection_id=f.first_seen_inspection_id,
-        )
-        base = FindingOut.model_validate(f)
-        finding_outs.append(
-            base.model_copy(update={"first_detected_inspections_ago": ago})
-        )
-
-    return InspectionSummary(
-        id=inspection.id,
-        truck_id=inspection.truck_id,
-        truck_label=_truck_label(truck),
-        make=truck.make if truck else None,
-        model=truck.model if truck else None,
-        started_at=inspection.started_at,
-        status=inspection.status,
-        capture_source=inspection.capture_source,
-        finding_count=len(finding_outs),
-        worst_severity=worst_severity([f.severity for f in findings]),
-        findings=finding_outs,
-        media=[MediaOut.model_validate(m) for m in media_items],
-    )
+async def _get_authorized_inspection(
+    db: AsyncSession,
+    inspection_id: UUID | str,
+    principal: Principal,
+) -> Inspection | None:
+    statement = select(Inspection).where(Inspection.id == str(inspection_id))
+    if principal.fleet_id is not None:
+        statement = statement.join(Truck).where(Truck.fleet_id == principal.fleet_id)
+    return (await db.execute(statement)).scalar_one_or_none()
 
 
 @router.post("", response_model=InspectionOut, status_code=201)
 async def create_inspection(
-    payload: InspectionCreate, db: AsyncSession = Depends(get_db)
+    payload: InspectionCreate,
+    db: AsyncSession = Depends(get_db),
+    principal: Principal = Depends(require_api_access),
 ):
-    truck = await db.get(Truck, payload.truck_id)
+    truck_id = str(payload.truck_id)
+    truck_statement = select(Truck).where(Truck.id == truck_id)
+    if principal.fleet_id is not None:
+        truck_statement = truck_statement.where(Truck.fleet_id == principal.fleet_id)
+    truck = (await db.execute(truck_statement)).scalar_one_or_none()
     if truck is None:
         raise HTTPException(404, "Truck not found")
     inspection = Inspection(
-        truck_id=payload.truck_id,
-        capture_source=payload.capture_source,
-        created_by=payload.created_by,
-        status="pending",
+        truck_id=truck_id,
+        capture_source=payload.capture_source.value,
+        status=InspectionStatus.UPLOADING.value,
     )
     db.add(inspection)
     await db.commit()
@@ -116,113 +71,173 @@ async def create_inspection(
 
 
 @router.get("", response_model=list[InspectionSummary])
-async def list_inspections(limit: int = 25, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(
-        select(Inspection).order_by(Inspection.started_at.desc()).limit(limit)
-    )
+async def list_inspections(
+    limit: int = Query(25, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    principal: Principal = Depends(require_api_access),
+):
+    statement = select(Inspection)
+    if principal.fleet_id is not None:
+        statement = statement.join(Truck).where(Truck.fleet_id == principal.fleet_id)
+    result = await db.execute(statement.order_by(Inspection.started_at.desc()).limit(limit))
     inspections = result.scalars().all()
-    return [await _build_summary(db, i) for i in inspections]
+    return await build_inspection_summaries(db, list(inspections))
 
 
 @router.get("/{inspection_id}", response_model=InspectionSummary)
-async def get_inspection(inspection_id: str, db: AsyncSession = Depends(get_db)):
-    inspection = await db.get(Inspection, inspection_id)
+async def get_inspection(
+    inspection_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    principal: Principal = Depends(require_api_access),
+):
+    inspection = await _get_authorized_inspection(db, inspection_id, principal)
     if inspection is None:
         raise HTTPException(404, "Inspection not found")
-    return await _build_summary(db, inspection)
+    return (await build_inspection_summaries(db, [inspection]))[0]
 
 
 @router.get("/{inspection_id}/findings", response_model=list[FindingOut])
 async def inspection_findings(
-    inspection_id: str, db: AsyncSession = Depends(get_db)
+    inspection_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    principal: Principal = Depends(require_api_access),
 ):
+    if await _get_authorized_inspection(db, inspection_id, principal) is None:
+        raise HTTPException(404, "Inspection not found")
+    inspection_key = str(inspection_id)
     result = await db.execute(
-        select(Finding).where(Finding.inspection_id == inspection_id)
+        select(Finding).where(Finding.inspection_id == inspection_key)
     )
     return result.scalars().all()
 
 
 @router.get("/{inspection_id}/media", response_model=list[MediaOut])
 async def inspection_media(
-    inspection_id: str, db: AsyncSession = Depends(get_db)
+    inspection_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    principal: Principal = Depends(require_api_access),
 ):
-    inspection = await db.get(Inspection, inspection_id)
+    inspection = await _get_authorized_inspection(db, inspection_id, principal)
     if inspection is None:
         raise HTTPException(404, "Inspection not found")
-    rows = await get_inspection_media_rows(db, inspection_id)
-    return rows
-
-
-@router.post("/{inspection_id}/sync-media")
-async def sync_inspection_media(
-    inspection_id: str, db: AsyncSession = Depends(get_db)
-):
-    """Backfill inspection_media rows from files already on disk."""
-    inspection = await db.get(Inspection, inspection_id)
-    if inspection is None:
-        raise HTTPException(404, "Inspection not found")
-    added = await sync_inspection_media_from_disk(db, inspection_id)
-    rows = await get_inspection_media_rows(db, inspection_id)
-    return {"synced": added, "total": len(rows)}
+    inspection_key = str(inspection_id)
+    result = await db.execute(
+        select(InspectionMedia)
+        .where(InspectionMedia.inspection_id == inspection_key)
+        .order_by(InspectionMedia.captured_at.asc())
+    )
+    return result.scalars().all()
 
 
 @router.post("/{inspection_id}/upload", response_model=UploadResult)
 async def upload_media(
-    inspection_id: str,
-    background_tasks: BackgroundTasks,
+    inspection_id: UUID,
     files: list[UploadFile] = File(...),
-    capture_angle: str = Form(...),
-    capture_source: str = Form("mobile"),
+    capture_angle: CaptureAngle = Form(...),
+    capture_source: IngestibleCaptureSource = Form(IngestibleCaptureSource.MOBILE),
     gps_lat: float | None = Form(None),
     gps_lng: float | None = Form(None),
-    drone_flight_id: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
+    principal: Principal = Depends(require_api_access),
 ):
-    inspection = await db.get(Inspection, inspection_id)
+    inspection_key = str(inspection_id)
+    inspection = await _get_authorized_inspection(db, inspection_key, principal)
     if inspection is None:
         raise HTTPException(404, "Inspection not found")
+    if inspection.status != InspectionStatus.UPLOADING.value:
+        raise HTTPException(409, "Inspection is not accepting uploads")
+    if not files:
+        raise HTTPException(400, "At least one media file is required")
+    if len(files) > settings.max_files_per_upload:
+        raise HTTPException(
+            413,
+            f"At most {settings.max_files_per_upload} files are allowed per upload",
+        )
+    if gps_lat is not None and not -90 <= gps_lat <= 90:
+        raise HTTPException(422, "gps_lat must be between -90 and 90")
+    if gps_lng is not None and not -180 <= gps_lng <= 180:
+        raise HTTPException(422, "gps_lng must be between -180 and 180")
 
-    adapter = ADAPTERS.get(capture_source)
-    if adapter is None:
-        raise HTTPException(400, f"Unknown capture source: {capture_source}")
+    adapter = get_capture_adapter(capture_source)
 
-    metadata = {
-        "gps_lat": gps_lat,
-        "gps_lng": gps_lng,
-        "drone_flight_id": drone_flight_id,
-    }
+    metadata = CaptureMetadata(gps_lat=gps_lat, gps_lng=gps_lng)
 
     try:
-        paths = await adapter.receive_media(
-            inspection_id, files, capture_angle, metadata
+        stored_items = await adapter.receive_media(
+            inspection_key, files, capture_angle.value, metadata
         )
-    except NotImplementedError as exc:
-        raise HTTPException(501, str(exc)) from exc
+    except StorageError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
-    for path in paths:
-        is_video = path.lower().endswith(VIDEO_EXTS)
-        db.add(
-            InspectionMedia(
-                inspection_id=inspection_id,
-                media_type="video" if is_video else "photo",
-                capture_angle=capture_angle,
-                capture_source=adapter.get_source_name(),
-                drone_flight_id=metadata.get("drone_flight_id"),
-                storage_path=path,
-                gps_lat=metadata.get("gps_lat"),
-                gps_lng=metadata.get("gps_lng"),
+    try:
+        for item in stored_items:
+            db.add(
+                InspectionMedia(
+                    inspection_id=inspection_key,
+                    media_type=item.media_type,
+                    capture_angle=capture_angle.value,
+                    capture_source=adapter.get_source_name(),
+                    storage_path=item.storage_path,
+                    gps_lat=metadata.gps_lat,
+                    gps_lng=metadata.gps_lng,
+                )
             )
-        )
-    inspection.capture_source = adapter.get_source_name()
-    inspection.status = "pending"
-    await db.commit()
-
-    # Same analysis pipeline regardless of capture source.
-    background_tasks.add_task(analyze_inspection, inspection_id)
+        inspection.capture_source = adapter.get_source_name()
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        for item in stored_items:
+            await storage_service.delete(item.storage_path)
+        raise
 
     return UploadResult(
-        uploaded=len(paths),
-        source=capture_source,
-        status="analysis_queued",
-        inspection_id=inspection_id,
+        uploaded=len(stored_items),
+        source=capture_source.value,
+        status="media_uploaded",
+        inspection_id=inspection_key,
     )
+
+
+@router.post("/{inspection_id}/finalize", response_model=InspectionOut)
+async def finalize_inspection(
+    inspection_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+    principal: Principal = Depends(require_api_access),
+):
+    inspection_key = str(inspection_id)
+    inspection = await _get_authorized_inspection(db, inspection_key, principal)
+    if inspection is None:
+        raise HTTPException(404, "Inspection not found")
+    if inspection.status != InspectionStatus.UPLOADING.value:
+        raise HTTPException(409, "Inspection has already been finalized")
+
+    media_count = await db.scalar(
+        select(func.count())
+        .select_from(InspectionMedia)
+        .where(InspectionMedia.inspection_id == inspection_key)
+    )
+    if not media_count:
+        raise HTTPException(409, "Upload at least one media file before finalizing")
+
+    transition = await db.execute(
+        update(Inspection)
+        .where(
+            Inspection.id == inspection_key,
+            Inspection.status == InspectionStatus.UPLOADING.value,
+        )
+        .values(status=InspectionStatus.SUBMITTED.value)
+    )
+    if transition.rowcount != 1:
+        await db.rollback()
+        raise HTTPException(409, "Inspection has already been finalized")
+    analysis_job = AnalysisJob(inspection_id=inspection_key, status="pending")
+    db.add(analysis_job)
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(409, "Inspection has already been finalized") from exc
+    await db.refresh(inspection)
+    background_tasks.add_task(run_analysis_job, analysis_job.id)
+    return inspection

@@ -12,6 +12,10 @@ __pycache__/
 venv/
 *.egg-info/
 .pytest_cache/
+*.db
+*.db-shm
+*.db-wal
+backend/storage/
 
 # Env / secrets
 .env

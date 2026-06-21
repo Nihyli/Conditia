@@ -5,7 +5,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    host: true,
+    host: "127.0.0.1",
     // Proxy API calls through Vite in dev — avoids CORS and localhost vs 127.0.0.1 mismatches.
     proxy: {
       "/api": {

@@ -1,41 +1,13 @@
 import type { DamageZone, Finding, Inspection, Severity } from "../types";
+import {
+  severityClass,
+  severityColor,
+  severityFill,
+  severityLabel,
+  severityRank,
+} from "../severity";
 import { IconDownload } from "./icons";
 import { InspectionMediaViewer } from "./InspectionMediaViewer";
-
-const sevColor: Record<Severity, string> = {
-  critical: "var(--crit)",
-  medium: "var(--med)",
-  low: "var(--low)",
-  clear: "var(--clear)",
-};
-
-const sevFill: Record<Severity, string> = {
-  critical: "var(--crit-bg)",
-  medium: "var(--med-bg)",
-  low: "var(--low-bg)",
-  clear: "var(--clear-bg)",
-};
-
-const sevLabel: Record<Severity, string> = {
-  critical: "Critical",
-  medium: "Medium",
-  low: "Low",
-  clear: "Clear",
-};
-
-const sevClass: Record<Severity, string> = {
-  critical: "crit",
-  medium: "medium",
-  low: "low",
-  clear: "clear",
-};
-
-const sevRank: Record<Severity, number> = {
-  critical: 3,
-  medium: 2,
-  low: 1,
-  clear: 0,
-};
 
 const zoneCaption: Record<DamageZone, string> = {
   front: "front",
@@ -45,6 +17,7 @@ const zoneCaption: Record<DamageZone, string> = {
   trailer_rear: "rear",
   passenger_side: "side",
   driver_side: "side",
+  unknown: "unknown",
 };
 
 // Clickable/paintable regions over the truck silhouette (side profile, cab right).
@@ -59,7 +32,8 @@ function zoneSeverity(findings: Finding[], zone: DamageZone): Severity | null {
   const inZone = findings.filter((f) => f.zone === zone);
   if (inZone.length === 0) return null;
   return inZone.reduce<Severity>(
-    (worst, f) => (sevRank[f.severity] > sevRank[worst] ? f.severity : worst),
+    (worst, f) =>
+      severityRank[f.severity] > severityRank[worst] ? f.severity : worst,
     "clear"
   );
 }
@@ -95,8 +69,8 @@ function TruckSilhouette({ findings }: { findings: Finding[] }) {
             width={w}
             height={86}
             rx={6}
-            fill={sev ? sevFill[sev] : "var(--surface-2)"}
-            stroke={sev ? sevColor[sev] : "var(--border)"}
+            fill={sev ? severityFill[sev] : "var(--surface-2)"}
+            stroke={sev ? severityColor[sev] : "var(--border)"}
             strokeWidth={sev ? 1.5 : 1}
             opacity={sev ? 1 : 0.6}
           />
@@ -134,8 +108,8 @@ function TruckSilhouette({ findings }: { findings: Finding[] }) {
         if (!sev) return null;
         return (
           <g key={`m-${zone}`}>
-            <circle cx={cx} cy={105} r={13} fill={sevColor[sev]} />
-            <circle cx={cx} cy={105} r={17} fill="none" stroke={sevColor[sev]} strokeWidth={1.5} opacity={0.35} />
+            <circle cx={cx} cy={105} r={13} fill={severityColor[sev]} />
+            <circle cx={cx} cy={105} r={17} fill="none" stroke={severityColor[sev]} strokeWidth={1.5} opacity={0.35} />
             <text x={cx} y={110} textAnchor="middle" fontSize={15} fontWeight={800} fill="white">
               !
             </text>
@@ -155,7 +129,7 @@ const legend: { sev: Severity }[] = [
 
 export function DamageMap({ inspection }: { inspection: Inspection }) {
   const sorted = [...inspection.findings].sort(
-    (a, b) => sevRank[b.severity] - sevRank[a.severity]
+    (a, b) => severityRank[b.severity] - severityRank[a.severity]
   );
 
   return (
@@ -165,7 +139,7 @@ export function DamageMap({ inspection }: { inspection: Inspection }) {
           {inspection.truckLabel} — Damage map
         </h2>
         <div className="panel__spacer" />
-        <button className="ghost-btn">
+        <button className="ghost-btn" disabled title="PDF export is not available yet">
           <IconDownload />
           Export PDF
         </button>
@@ -191,8 +165,8 @@ export function DamageMap({ inspection }: { inspection: Inspection }) {
       <div className="legend">
         {legend.map(({ sev }) => (
           <span className="legend__item" key={sev}>
-            <span className="legend__dot" style={{ background: sevColor[sev] }} />
-            {sevLabel[sev]}
+            <span className="legend__dot" style={{ background: severityColor[sev] }} />
+            {severityLabel[sev]}
           </span>
         ))}
       </div>
@@ -200,9 +174,14 @@ export function DamageMap({ inspection }: { inspection: Inspection }) {
       <div className="findings">
         {sorted.length === 0 ? (
           <div className="empty">
-            <div className="empty__title">No findings yet</div>
-            Analysis has not detected damage on this inspection, or processing
-            is still running. Review the captured media above.
+            <div className="empty__title">
+              {inspection.status === "review_required"
+                ? "Manual review required"
+                : "No findings yet"}
+            </div>
+            {inspection.status === "review_required"
+              ? "Automated analysis was unavailable or experimental. This is not a clear result; review the captured media above."
+              : "Analysis has not detected damage on this inspection, or processing is still running. Review the captured media above."}
           </div>
         ) : (
           sorted.map((f) => (
@@ -210,18 +189,18 @@ export function DamageMap({ inspection }: { inspection: Inspection }) {
               <div
                 className="finding__thumb"
                 style={{
-                  background: sevFill[f.severity],
-                  borderColor: sevColor[f.severity],
-                  color: sevColor[f.severity],
+                  background: severityFill[f.severity],
+                  borderColor: severityColor[f.severity],
+                  color: severityColor[f.severity],
                 }}
               >
                 {zoneCaption[f.zone]}
               </div>
               <div className="finding__body">
                 <div className="finding__top">
-                  <span className={`sev ${sevClass[f.severity]}`}>
+                  <span className={`sev ${severityClass[f.severity]}`}>
                     <span className="sev__dot" />
-                    {sevLabel[f.severity]}
+                    {severityLabel[f.severity]}
                   </span>
                   <span className="finding__title">{f.title}</span>
                 </div>

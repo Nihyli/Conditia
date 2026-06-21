@@ -52,7 +52,10 @@ export function DashboardPage() {
             return d.toDateString() === now.toDateString();
           }).length,
           inspections_pending: inspRows.filter(
-            (i) => i.status === "pending" || i.status === "processing"
+            (i) =>
+              i.status === "uploading" ||
+              i.status === "submitted" ||
+              i.status === "processing"
           ).length,
           inspections_complete_today: inspRows.filter((i) => {
             const d = new Date(i.started_at);
@@ -88,7 +91,10 @@ export function DashboardPage() {
   // Poll while any inspection is still processing.
   useEffect(() => {
     const needsPoll = inspections.some(
-      (i) => i.status === "pending" || i.status === "processing"
+      (i) =>
+        i.status === "uploading" ||
+        i.status === "submitted" ||
+        i.status === "processing"
     );
     if (!needsPoll) {
       if (pollRef.current !== null) {
@@ -134,9 +140,9 @@ export function DashboardPage() {
               <p className="muted">{error}</p>
               <p className="muted">
                 Backend should be running at{" "}
-                <code>http://localhost:8000</code> (dev proxy:{" "}
+                <code>http://127.0.0.1:8001</code> (dev proxy:{" "}
                 <code>/api</code>). Check{" "}
-                <a href="http://localhost:8000/docs" target="_blank" rel="noreferrer">
+                <a href="http://127.0.0.1:8001/docs" target="_blank" rel="noreferrer">
                   /docs
                 </a>{" "}
                 — if <code>/fleet/stats</code> is missing, restart the backend.

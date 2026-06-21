@@ -5,13 +5,13 @@ import type {
   ApiMedia,
 } from "./api";
 import { formatCapturedAt } from "./formatTime";
+import { parseSeverity } from "./severity";
 import type {
   CaptureSource,
   DamageZone,
   Finding,
   FleetStat,
   Inspection,
-  Severity,
 } from "./types";
 
 const VALID_ZONES = new Set<string>([
@@ -24,24 +24,59 @@ const VALID_ZONES = new Set<string>([
   "driver_side",
 ]);
 
-function normalizeSeverity(raw: string): Severity {
-  if (raw === "high") return "critical";
-  if (raw === "critical" || raw === "medium" || raw === "low" || raw === "clear")
-    return raw;
-  return "low";
-}
+const VALID_FINDING_TYPES = new Set<Finding["type"]>([
+  "dent",
+  "scratch",
+  "crack",
+  "missing_component",
+  "rust",
+  "anomaly",
+]);
+
+const VALID_SOURCES = new Set<CaptureSource>([
+  "mobile",
+  "drone",
+  "fixed_camera",
+]);
+
+const VALID_STATUSES = new Set<Inspection["status"]>([
+  "uploading",
+  "submitted",
+  "processing",
+  "complete",
+  "review_required",
+  "failed",
+]);
 
 function normalizeZone(zone: string | null): DamageZone {
   if (zone && VALID_ZONES.has(zone)) return zone as DamageZone;
-  return "trailer_mid";
+  return "unknown";
+}
+
+function normalizeFindingType(raw: string): Finding["type"] {
+  return VALID_FINDING_TYPES.has(raw as Finding["type"])
+    ? (raw as Finding["type"])
+    : "anomaly";
+}
+
+function parseSource(raw: string): CaptureSource {
+  if (VALID_SOURCES.has(raw as CaptureSource)) return raw as CaptureSource;
+  throw new Error(`Unsupported capture source: ${raw}`);
+}
+
+function parseStatus(raw: string): Inspection["status"] {
+  if (VALID_STATUSES.has(raw as Inspection["status"])) {
+    return raw as Inspection["status"];
+  }
+  throw new Error(`Unsupported inspection status: ${raw}`);
 }
 
 function mapFinding(f: ApiFinding): Finding {
   return {
     id: f.id,
     title: f.title ?? f.finding_type,
-    type: f.finding_type as Finding["type"],
-    severity: normalizeSeverity(f.severity),
+    type: normalizeFindingType(f.finding_type),
+    severity: parseSeverity(f.severity),
     location: f.location ?? "Unknown location",
     confidence: f.confidence,
     zone: normalizeZone(f.zone),
@@ -69,8 +104,8 @@ export function mapInspectionSummary(row: ApiInspectionSummary): Inspection {
     model: row.model ?? "",
     capturedAtLabel,
     relativeLabel,
-    source: row.capture_source as CaptureSource,
-    status: row.status as Inspection["status"],
+    source: parseSource(row.capture_source),
+    status: parseStatus(row.status),
     findings: row.findings.map(mapFinding),
     media: (row.media ?? []).map(mapMedia),
   };

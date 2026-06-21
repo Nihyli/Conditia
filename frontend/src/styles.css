@@ -851,6 +851,14 @@ button {
   cursor: default;
 }
 
+.ghost-btn:disabled,
+.org-switcher:disabled,
+.icon-btn:disabled,
+.avatar:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 /* ============================================================
    Mobile capture flow (phone-first, large touch targets)
    ============================================================ */

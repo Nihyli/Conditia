@@ -41,7 +41,7 @@ export function InspectionMediaViewer({
       <div className="media-viewer">
         <p className="muted media-viewer__status">
           No photos or videos for this inspection. If files exist in{" "}
-          <code>backend/storage/</code>, restart the backend (v0.2.0+) and click
+          <code>backend/storage/</code>, restart the backend and click
           Retry on the dashboard, or run{" "}
           <code>python sync_storage.py</code> in the backend folder.
         </p>
@@ -63,14 +63,14 @@ export function InspectionMediaViewer({
           <video
             key={active.id}
             className="media-viewer__player"
-            src={mediaUrl(active.storagePath)}
+            src={mediaUrl(active.id)}
             controls
             playsInline
           />
         ) : active ? (
           <img
             className="media-viewer__player"
-            src={mediaUrl(active.storagePath)}
+            src={mediaUrl(active.id)}
             alt={formatAngle(active.captureAngle)}
           />
         ) : null}
@@ -87,7 +87,7 @@ export function InspectionMediaViewer({
             {item.mediaType === "video" ? (
               <video
                 className="media-thumb__img"
-                src={mediaUrl(item.storagePath)}
+                src={mediaUrl(item.id)}
                 muted
                 playsInline
                 preload="metadata"
@@ -95,7 +95,7 @@ export function InspectionMediaViewer({
             ) : (
               <img
                 className="media-thumb__img"
-                src={mediaUrl(item.storagePath)}
+                src={mediaUrl(item.id)}
                 alt={formatAngle(item.captureAngle)}
               />
             )}

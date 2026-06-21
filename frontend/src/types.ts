@@ -7,7 +7,13 @@ export interface Inspection {
   capturedAtLabel: string;
   relativeLabel: string;
   source: CaptureSource;
-  status: "complete" | "processing" | "pending" | "failed";
+  status:
+    | "uploading"
+    | "submitted"
+    | "processing"
+    | "complete"
+    | "review_required"
+    | "failed";
   findings: Finding[];
   media: InspectionMedia[];
 }
@@ -31,7 +37,8 @@ export type DamageZone =
   | "trailer_mid"
   | "trailer_rear"
   | "passenger_side"
-  | "driver_side";
+  | "driver_side"
+  | "unknown";
 
 export interface Finding {
   id: string;

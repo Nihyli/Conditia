@@ -13,17 +13,17 @@ export function Topbar({ title }: { title: string }) {
         New inspection
       </Link>
 
-      <button className="org-switcher">
+      <button className="org-switcher" disabled title="Organization switching is not available yet">
         {ORG_NAME}
         <IconChevronDown />
       </button>
 
-      <button className="icon-btn" aria-label="Notifications">
+      <button className="icon-btn" aria-label="Notifications" disabled>
         <IconBell size={19} />
         <span className="icon-btn__dot" aria-hidden />
       </button>
 
-      <button className="avatar" aria-label="Account">
+      <button className="avatar" aria-label="Account" disabled>
         {USER_INITIALS}
       </button>
     </header>

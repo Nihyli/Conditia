@@ -4,7 +4,7 @@
 
 Conditia is a system of record for the condition of physical fleet assets. Today, a driver or yard worker uses the mobile web capture flow to record a truck from several angles. The backend stores the media, analyzes it for damage, compares findings with earlier inspections, and produces structured inspection data for a fleet dashboard. The design is intended to remain independent of capture hardware so that mobile phones, drones, and fixed cameras can feed the same downstream workflow.
 
-The current damage detector is a stub unless Google Cloud Vision is configured. PDF export, drone capture, authentication, and a production Supabase integration are not implemented yet; do not represent those features as complete.
+The current damage detector is unavailable unless Google Cloud Vision is configured, and that integration is experimental triage that always requires human review. PDF export, drone capture, user-level authentication/roles, and a production worker are not implemented; do not represent those features as complete. Private Supabase media storage and fleet-scoped service API-key authentication are implemented, but they do not replace end-user identity and authorization.
 
 ## Architecture Overview
 
@@ -34,7 +34,7 @@ Important patterns already present and worth preserving:
 - UI design tokens and severity semantics are centralized in `styles.css`.
 - Change-over-time information is a first-class product concept, not a view-only calculation.
 
-The current implementation only partially enforces the intended layers. In particular, `routers/inspections.py` performs workflow orchestration and query assembly, services instantiate concrete global dependencies, and no repository layer exists. Future changes should improve these boundaries incrementally rather than rewriting the application at once.
+The current implementation only partially enforces the intended layers. `routers/inspections.py` still performs ingestion/finalization orchestration, services instantiate concrete global dependencies, and no repository layer exists. Inspection response assembly has moved into a query service. Future changes should improve these boundaries incrementally rather than rewriting the application at once.
 
 ## Important Design Rules
 
@@ -53,7 +53,7 @@ The current implementation only partially enforces the intended layers. In parti
 - Preserve strict TypeScript. Validate server data at the boundary instead of using unchecked casts to make unknown values fit UI unions.
 - Prefer small readable functions and cohesive modules. Extract code because it owns a concept or repeated policy, not merely to reduce line count.
 - Add or update unit, API, adapter, and integration tests whenever behavior changes. A passing frontend build is not a substitute for tests.
-- Keep the SQLAlchemy schema and `backend/db/schema.sql` equivalent. Every constraint, nullability rule, index, and uniqueness invariant must be represented and migrated deliberately in both environments until a single migration system replaces the dual definitions.
+- Treat Alembic as the schema source of truth. Every constraint, index, membership table, and PostgreSQL RLS policy must be delivered by a migration. `backend/db/schema.sql` is currently a deployment reference and must not evolve independently.
 - Preserve API compatibility unless the task explicitly changes the contract. If behavior changes, update frontend DTOs, documentation, and contract tests together.
 
 ## Folder Responsibilities
@@ -66,7 +66,8 @@ The current implementation only partially enforces the intended layers. In parti
 | `backend/repositories/` (add when extracting data access) | Narrow SQLAlchemy queries and persistence operations behind application-facing interfaces | HTTP details, UI formatting, filesystem storage logic |
 | `backend/models/db_models.py` | SQLAlchemy persistence models and database constraints | Request validation or workflow methods |
 | `backend/models/schemas.py` | Pydantic API contracts and domain validation shared by the transport boundary | Database queries or side effects |
-| `backend/db/` | Production DDL and, preferably, future migrations | Runtime business logic |
+| `backend/migrations/` | Versioned schema, PostgreSQL policies, and compatibility migrations | Runtime business logic or hand-applied unversioned changes |
+| `backend/db/` | Reference PostgreSQL/Supabase DDL while it remains in the repository | A second independently evolving schema authority |
 | `backend/config.py`, `backend/paths.py` | Typed environment configuration and portable defaults | Developer-specific paths, credentials, or feature behavior |
 | `frontend/src/pages/` | Page-level orchestration, routing concerns, and composition of smaller components/hooks | A full API client, repeated domain normalization, or several unrelated workflows in one component |
 | `frontend/src/components/` | Reusable presentational and interaction components | Backend DTO assumptions or duplicated request logic |
@@ -81,48 +82,37 @@ The current implementation only partially enforces the intended layers. In parti
 
 | Area/File | Issue | Why it matters | Recommended fix | Priority |
 |---|---|---|---|---|
-| `backend/adapters/mobile.py`, `backend/services/storage.py` | `capture_angle` and the client filename are concatenated into a path without sanitization or a containment check. | `..`, path separators, or absolute path behavior can write/read outside the storage root. | Generate server-owned filenames, allow-list angles/extensions, resolve the destination, and reject any path not contained by the storage root. | High |
-| Upload endpoint and local storage | Uploads have no byte limit, file-count limit, MIME/signature validation, or streaming write; each file is read fully into memory. | Large or disguised uploads can exhaust memory/disk and public static media can serve unsafe content. | Enforce request/file limits, allow-list verified image/video formats, stream to a temporary file, atomically move after validation, and reject empty files. | High |
-| `backend/routers/inspections.py`, `backend/services/analysis.py` | Every angle upload queues full inspection analysis and can set the inspection to `complete`. Jobs are not idempotent and findings are not replaced/deduplicated. | A six-angle capture can be marked complete early, analyzed repeatedly, race with later uploads, and create duplicate findings/reports. | Separate media upload from an explicit finalize action; enqueue one durable idempotent job; add lifecycle guards and unique/idempotency constraints. | High |
-| Entire API and `/media` mount | There is no authentication, authorization, fleet scoping, or access control on media. `created_by` is trusted client text. | Any reachable client can read media and modify or enumerate fleet records; this blocks safe multi-tenant/production use. | Add authenticated principals, fleet ownership checks, server-derived actor IDs, and authorized/signed media delivery before deployment. | High |
-| `backend/models/schemas.py`, router query/form parameters | Domain validation is minimal. Most IDs/statuses/sources/angles/VINs/years/GPS coordinates and `limit` are unrestricted strings/numbers. | Invalid states enter storage, negative/unbounded limits are accepted, and downstream code relies on unchecked values. | Introduce enums, UUID types, constrained strings/numbers, VIN normalization, bounded pagination, and cross-field validators. | High |
-| Error handling in routers, vision, and analysis | Duplicate VIN/database errors are not translated or rolled back consistently. Vision/frame exceptions are broadly swallowed and detector failure becomes an empty detection set. | Clients receive inconsistent errors and a failed detector can generate a false “no findings” report. | Define typed application errors and one HTTP handler; log causes; distinguish `analysis_failed` from a valid clear inspection; preserve safe client messages. | High |
-| Test suite | No backend or frontend test files, test scripts, fixtures, or CI configuration are present. | Core upload, lifecycle, change-detection, and security behavior can regress without detection. | Establish pytest/async database tests and Vitest/React Testing Library; add CI for tests, type checking, and builds. | High |
-| Tracked runtime artifacts | `backend/conditia.db` and sample files under `backend/storage/` are committed, and `.gitignore` does not exclude them. | Real customer media or local data can be committed accidentally; binary changes add repository noise. | Add DB/storage patterns to `.gitignore`, retain explicit safe fixtures elsewhere, and remove tracked runtime artifacts in a deliberate cleanup change. | High |
-| Async paths in storage, analysis, media sync, and vision | `Path.read_bytes/write_bytes`, OpenCV frame extraction, and the synchronous Google client run inside async functions. | Blocking I/O and CPU work can stall all FastAPI requests under load. | Stream with async I/O where useful; execute blocking adapters in a thread/process; use a job queue for analysis. | High |
-| ORM models vs `backend/db/schema.sql` | SQLite/SQLAlchemy omits PostgreSQL checks and indexes; nullability/types differ; neither schema enforces one report per inspection or storage-key uniqueness. There is no migration system. | Local and production behavior will diverge, invalid states remain possible, and concurrent report creation can duplicate rows. | Adopt Alembic as the source of truth; align constraints and types; add uniqueness and indexes based on documented invariants. | High |
-| `backend/routers/inspections.py` | The router owns adapter registration, upload orchestration, state changes, DB writes, disk recovery, summary assembly, and history calculations. | The 228-line transport module has several responsibilities and is difficult to unit test. | Extract an ingestion/finalization service and an inspection query service; leave HTTP translation in the router. | Medium |
-| `backend/services/analysis.py` and other services | Services create `SessionLocal` and import global `storage_service`, detector, and report modules directly. | High-level workflows depend on concrete infrastructure and require a real database/filesystem for tests. | Inject repositories and `Storage`, `Detector`, and job interfaces; wire defaults in an application composition module. | Medium |
-| Capture adapter contract | `receive_media` accepts an untyped `metadata: dict`, ignores it in the mobile adapter, and returns only strings. Adapter registration lives in a router; `manual`/`fixed_camera` are schema values without adapters. | Metadata and supported-source rules can drift, and core code reconstructs information the adapter should return. | Use typed metadata/result DTOs and a registry dependency; explicitly distinguish valid stored sources from currently ingestible sources. | Medium |
-| `backend/services/media_sync.py`, `backend/sync_storage.py` | Recovery logic is duplicated, searches working-directory fallbacks, copies files synchronously, and a GET path can mutate storage/database when media rows are absent. It hardcodes source `mobile`. | Reads are surprising, duplicate implementations drift, and recovered metadata can be incorrect. | Make recovery an explicit admin/maintenance command using one shared service; never repair state during normal GET requests. | Medium |
-| Inspection queries and change detection | Summary building queries truck/findings/media per inspection and history once per finding; change detection performs a query per prior inspection. | This is an N+1 pattern that grows rapidly with fleet history. | Use joins/select-in loading and batched queries; compute first-seen/history counts in repositories with bounded query counts. | Medium |
-| Database lifecycle | Foreign keys have no explicit delete policy and SQLite foreign-key enforcement is not enabled explicitly. | Deletes or bad imports can leave orphaned media/findings/reports. | Define cascade/restrict behavior and enable/test foreign-key enforcement for SQLite. | Medium |
-| Frontend `CapturePage.tsx` | One 396-line component owns truck loading/registration, inspection lifecycle, six-angle state, upload progress, and three page phases. | Independent behaviors are coupled and difficult to test or change safely. | Extract a capture-session hook/state reducer, a truck selector/registration component, and phase-specific components. | Medium |
-| Frontend API boundary | `mapInspection.ts` casts arbitrary strings to unions and maps unknown finding types without validation. `api.ts` repeats response handling and exposes status-only errors. | Contract drift becomes invalid UI state and useful structured API errors are lost. | Parse runtime schemas or generated OpenAPI types; centralize request/error decoding; reject or explicitly map unknown enum values. | Medium |
-| Configuration and documentation | Backend docs, UI help, production fallback, Vite proxy, and `start.ps1` disagree between ports 8000 and 8001. `.env.example` and backend README contain a developer-specific Windows path; app versions disagree. | Setup is unreliable and environment behavior is scattered. | Choose one documented development port, use `VITE_API_URL` for deployed builds, remove personal paths, and define app version once. | Medium |
-| Reports and UI controls | Backend documentation describes `/inspections/{id}/report`, but implementation uses `/reports/{inspection_id}`. Export PDF, filter, navigation, notifications, and account controls render without implemented behavior. | The documented contract is inaccurate and controls imply functionality that does not exist. | Align endpoint docs/tests and disable, hide, or label placeholder controls until their behavior exists. | Low |
-| `styles.css`, severity helpers | The stylesheet is 1,171 lines, while severity ranking/labels are repeated in Python and multiple frontend files. | Parallel edits are conflict-prone and semantic rules can drift. | Split styles by shell/dashboard/capture when actively modifying them; centralize frontend severity metadata and keep a contract test against backend values. | Low |
+| `backend/security.py`, frontend API client | Authentication is one shared fleet API key with no user identity, roles, or actor attribution; the browser needs an identity-aware gateway. | A leaked key grants fleet-wide mutation and cannot support least privilege or audit history. | Add OIDC/Supabase JWT verification, membership/role checks, server-derived actor IDs, and a frontend session flow. | High |
+| Alembic vs `backend/db/schema.sql` | Memberships and PostgreSQL RLS exist only in reference SQL, not migrations. | `alembic upgrade head` can produce a database without documented tenant defense. | Deliver and test memberships/RLS through PostgreSQL Alembic migrations; make Alembic the only authority. | High |
+| `backend/services/analysis_jobs.py` | API processes execute jobs and reclaim every running job at startup without leases. | Rolling multi-instance deployments can reclaim work that is still active and run duplicate analysis. | Use a dedicated worker with leases, heartbeat, timeout, backoff, maximum attempts, and dead-letter/manual retry. | High |
+| `backend/services/vision.py` | Generic label detection and confidence-based provisional severity are experimental and always require review. | Results are not validated for safety, maintenance, insurance, or compliance decisions. | Define a reviewed taxonomy/severity model, localization, provenance, evaluation set, and human-review acceptance gates. | High |
+| Tracked runtime artifacts | Ignore rules are fixed, but `backend/conditia.db` and eight media files remain tracked. | Data can remain in Git history and mutable binaries add privacy/review risk. | Remove after explicit ownership/privacy approval and replace needed data with documented synthetic fixtures. | High |
+| Upload/request controls | Per-file and declared-body limits exist, but missing/chunked lengths, rate limits, tenant quotas, and total storage limits remain. | Authenticated abuse can consume parser space, bandwidth, storage, and worker capacity. | Enforce edge body/rate limits and application tenant/storage/concurrency quotas. | Medium |
+| `backend/services/analysis.py` | A database transaction remains open during media, video, and cloud processing. | Long transactions hold connections/locks and increase contention and rollback cost. | Detect outside the transaction; use a short lease-check-and-persist transaction. | Medium |
+| Inspection coverage | The backend finalizes after one media row while the six-angle UI allows every angle to be skipped. | Incomplete inspections can look structurally valid. | Define configurable server-side coverage templates and authorized override reasons. | Medium |
+| Backend global dependencies | Analysis/jobs import `SessionLocal`, storage, detector, and report implementations directly. | Failure tests and alternate infrastructure require monkeypatching and broad changes. | Inject repository, unit-of-work, storage, detector, and job ports at a composition root. | Medium |
+| Frontend `CapturePage.tsx`, API boundary, and tests | Capture remains a 433-line component; most responses use compile-time casts; only mapper tests exist. | UI workflows and contract failures can regress without component/E2E evidence. | Extract a reducer/hook and phase components; generate/validate API contracts; add component and E2E tests. | Medium |
 
 ## Refactoring Recommendations
 
 Apply these in order and keep each change independently reviewable:
 
-1. Secure media ingestion: validated angles and types, generated filenames, path containment, streaming, quotas, and safe cleanup on failure.
-2. Define the inspection state machine and change the flow to `create -> upload many -> finalize -> analyze once -> complete/failed`. Make analysis idempotent and concurrency-safe.
-3. Add authentication, fleet authorization, and protected media delivery before exposing the service beyond trusted local development.
-4. Add a backend test harness around the current behavior, then introduce typed errors and strict Pydantic validation without guessing client expectations.
-5. Move upload/finalization and summary assembly from `routers/inspections.py` into application services. Inject storage/detector/repository interfaces at the composition root.
-6. Adopt migrations, reconcile SQLAlchemy and PostgreSQL schemas, and add database constraints for state/source/type values and one report per inspection.
-7. Move blocking analysis to a durable worker. Record job attempts and detector failures so retries cannot duplicate data or claim a false clear inspection.
-8. Batch inspection/history queries and remove implicit media synchronization from GET requests. Consolidate recovery into an explicit maintenance command.
-9. Decompose `CapturePage` around a tested capture-session reducer/hook, and validate frontend API payloads at runtime or generate types from OpenAPI.
-10. Consolidate ports/version/configuration, correct endpoint documentation, remove tracked runtime data, and clearly label unfinished UI actions.
+1. Add user identity, membership roles, actor attribution, and PostgreSQL RLS migrations.
+2. Move analysis from API background tasks to a leased durable worker.
+3. Define and enforce inspection coverage, model validation, severity, and human-review policy.
+4. Shorten analysis transactions and formalize object-storage staging/reconciliation.
+5. Enforce edge request/rate limits plus tenant storage and concurrency quotas.
+6. Move upload/finalization from `routers/inspections.py` into injected command services.
+7. Add PostgreSQL/RLS/Supabase and real concurrency integration tests.
+8. Decompose `CapturePage` around a tested capture-session reducer/hook and generated/runtime-validated API client.
+9. Add production metrics, audit events, backup/restore, retention, and deployment security controls.
+10. Remove tracked runtime data after explicit privacy/ownership approval.
 
 Do not combine all ten items into a single rewrite. Security and lifecycle correctness should land with characterization tests first; structural cleanup can then follow stable boundaries.
 
 ## Testing Recommendations
 
-No automated tests currently exist. Add the following layers:
+Automated backend API/service/storage tests, frontend mapper tests, and CI now exist. Extend them with the following layers:
 
 - **Adapter tests:** verify each capture adapter returns normalized, server-owned storage keys; rejects traversal, invalid metadata, unsupported types, empty/oversized files; and preserves source-specific metadata. Run a shared contract suite against local storage and every future storage implementation.
 - **API route tests:** cover success, validation failures, not-found behavior, duplicate VIN, authorization/fleet isolation, bounded pagination, source availability, finalize conflicts, and stable safe error bodies. Use a temporary database and storage directory.
@@ -143,7 +133,7 @@ Minimum continuous verification should run Python lint/type checks, backend test
 - Stream uploads with hard per-file, per-request, and per-inspection limits. Restrict file count, verify signatures/codecs, reject active content, and handle partial writes atomically.
 - Do not expose the storage directory through an unrestricted static mount in production. Authorize access by fleet and inspection, or issue short-lived signed URLs with safe content headers.
 - GPS coordinates, drone flight IDs, VINs, actor IDs, and inspection timestamps affect audit evidence. Validate them and distinguish client-asserted metadata from server/device-attested data.
-- The application currently has no authentication or authorization. Treat it as local-development-only until those controls and tenant isolation are implemented.
+- The application has fleet-scoped service API-key authentication, not user identity or roles. Keep it behind a trusted gateway until user authorization and migration-installed RLS are implemented.
 - Database URLs, Supabase keys, service-account files, and deployed API origins belong in secrets/configuration. Do not log full database URLs because they may contain credentials.
 - Exclude local databases and uploaded media from version control. Use synthetic, documented fixtures with no personal, customer, vehicle, or location data.
 - Enable database constraints and foreign keys as defense in depth; API validation alone does not protect maintenance scripts or concurrent writers.

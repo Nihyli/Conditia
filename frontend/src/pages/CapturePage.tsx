@@ -5,6 +5,7 @@ import {
   API_BASE,
   createInspection,
   createTruck,
+  finalizeInspection,
   getTrucks,
   uploadMedia,
 } from "../api";
@@ -57,6 +58,7 @@ export function CapturePage() {
   const [regMake, setRegMake] = useState("");
   const [regModel, setRegModel] = useState("");
   const [registering, setRegistering] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
 
   useEffect(() => {
     void loadTrucks();
@@ -136,7 +138,7 @@ export function CapturePage() {
       });
       setStatus((s) => ({ ...s, [angle.key]: { state: "done", progress: 1 } }));
       if (angleIndex < ANGLES.length - 1) setAngleIndex((i) => i + 1);
-      else setPhase("done");
+      else await submitInspection();
     } catch (e) {
       setStatus((s) => ({
         ...s,
@@ -149,9 +151,25 @@ export function CapturePage() {
     }
   }
 
+  async function submitInspection() {
+    if (!inspectionId || finalizing) return;
+    setFinalizing(true);
+    setActionError(null);
+    try {
+      await finalizeInspection(inspectionId);
+      setPhase("done");
+    } catch (e) {
+      setActionError(
+        e instanceof Error ? e.message : "Could not finalize inspection"
+      );
+    } finally {
+      setFinalizing(false);
+    }
+  }
+
   function skipAngle() {
     if (angleIndex < ANGLES.length - 1) setAngleIndex((i) => i + 1);
-    else setPhase("done");
+    else void submitInspection();
   }
 
   // ---------- SELECT ----------
@@ -178,7 +196,7 @@ export function CapturePage() {
                 <p className="error-note">Can’t reach the Conditia API at {API_BASE}.</p>
                 <p className="muted">
                   Start the backend, then retry:{" "}
-                  <code>uvicorn main:app --reload --port 8000</code>
+                  <code>uvicorn main:app --reload --port 8001</code>
                 </p>
                 <button className="primary-btn" onClick={() => void loadTrucks()}>
                   <IconRefresh size={16} />
@@ -358,20 +376,39 @@ export function CapturePage() {
         key={angle.key}
         angle={angle}
         onCaptured={(blob, ext) => void handleCaptured(blob, ext)}
-        disabled={uploading}
+        disabled={uploading || finalizing}
       />
 
       <div className="upload-bar">
-        {uploading ? (
+        {actionError ? (
+          <div className="upload-bar__label">
+            <span className="error-note">{actionError}</span>
+            <button className="text-btn" onClick={() => void submitInspection()}>
+              Retry submit
+            </button>
+          </div>
+        ) : uploading || finalizing ? (
           <>
             <div className="upload-bar__label">
-              <span>Uploading {angle.label.toLowerCase()}…</span>
-              <span className="mono">{Math.round((current?.progress ?? 0) * 100)}%</span>
+              <span>
+                {finalizing
+                  ? "Submitting inspection…"
+                  : `Uploading ${angle.label.toLowerCase()}…`}
+              </span>
+              {!finalizing && (
+                <span className="mono">
+                  {Math.round((current?.progress ?? 0) * 100)}%
+                </span>
+              )}
             </div>
             <div className="upload-bar__track">
               <div
                 className="upload-bar__fill"
-                style={{ width: `${Math.round((current?.progress ?? 0) * 100)}%` }}
+                style={{
+                  width: finalizing
+                    ? "100%"
+                    : `${Math.round((current?.progress ?? 0) * 100)}%`,
+                }}
               />
             </div>
           </>

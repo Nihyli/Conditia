@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { getFleetStats, getInspections, getTrucks, type ApiTruck } from "../api";
+import { useAuth } from "../auth/AuthContext";
+import { canAccessNav, type UserRole } from "../auth/types";
 import { Sidebar } from "../components/Sidebar";
 import { Topbar } from "../components/Topbar";
 import { StatCards } from "../components/StatCards";
@@ -28,6 +30,8 @@ const navTitles: Record<string, string> = {
 const POLL_MS = 5000;
 
 export function DashboardPage() {
+  const { user } = useAuth();
+  const userRole: UserRole = user?.role ?? "viewer";
   const [activeNav, setActiveNav] = useState("overview");
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [trucks, setTrucks] = useState<ApiTruck[]>([]);
@@ -96,6 +100,12 @@ export function DashboardPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (user && !canAccessNav(userRole, activeNav)) {
+      setActiveNav("overview");
+    }
+  }, [user, userRole, activeNav]);
 
   useEffect(() => {
     const needsPoll = inspections.some(
@@ -215,10 +225,11 @@ export function DashboardPage() {
         active={activeNav}
         onSelect={setActiveNav}
         trucksBadge={truckBadge}
+        userRole={userRole}
       />
 
       <div className="main">
-        <Topbar title={navTitles[activeNav] ?? "Fleet overview"} />
+        <Topbar title={navTitles[activeNav] ?? "Fleet overview"} userRole={userRole} />
 
         <main className="content">
           {error ? (

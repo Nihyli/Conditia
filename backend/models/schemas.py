@@ -158,3 +158,32 @@ class UnseedResultOut(BaseModel):
 
 class DataStatusOut(DataCountsOut):
     pass
+
+
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    email: str
+    full_name: str | None
+    role: str
+    fleet_id: str | None = None
+    auth_provider: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserOut
+
+
+class AuthConfigOut(BaseModel):
+    auth_enabled: bool
+    provider: str
+    supabase_url: str | None = None
+    supabase_anon_key: str | None = None

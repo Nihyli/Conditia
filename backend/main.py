@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from config import settings
 from database import init_db
-from routers import admin, findings, fleet, inspections, reports, trucks
+from routers import admin, auth, findings, fleet, inspections, reports, trucks
 
 
 @asynccontextmanager
@@ -18,6 +18,9 @@ async def lifespan(app: FastAPI):
     print(f"  database: {settings.database_url}")
     print("=" * 50)
     await init_db()
+    from auth.seed_users import seed_users_if_empty
+
+    await seed_users_if_empty()
     if settings.seed_on_startup:
         from seed import seed_if_empty
 
@@ -45,6 +48,7 @@ _storage = Path(settings.storage_dir)
 _storage.mkdir(parents=True, exist_ok=True)
 app.mount("/media", StaticFiles(directory=str(_storage)), name="media")
 
+app.include_router(auth.router)
 app.include_router(admin.router)
 app.include_router(fleet.router)
 app.include_router(trucks.router)
@@ -58,7 +62,9 @@ async def health():
     return {
         "status": "ok",
         "version": "0.2.0",
-        "features": ["inspection_media", "media_sync", "fleet_stats"],
+        "features": ["inspection_media", "media_sync", "fleet_stats", "auth"],
+        "auth_enabled": settings.auth_enabled,
+        "auth_provider": settings.auth_provider,
         "database": settings.database_url.split("://", 1)[0],
         "storage_dir": settings.storage_dir,
         "vision": "google" if settings.google_vision_enabled else "stub",

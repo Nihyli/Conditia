@@ -34,6 +34,21 @@ class Fleet(Base):
     created_at: Mapped[datetime] = mapped_column(default=_now)
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
+    email: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+    full_name: Mapped[str | None] = mapped_column(String)
+    # admin | fleet_manager | inspector | viewer
+    role: Mapped[str] = mapped_column(String, default="viewer")
+    fleet_id: Mapped[str | None] = mapped_column(ForeignKey("fleets.id"))
+    # local | supabase
+    auth_provider: Mapped[str] = mapped_column(String, default="local")
+    created_at: Mapped[datetime] = mapped_column(default=_now)
+
+
 class Truck(Base):
     __tablename__ = "trucks"
 

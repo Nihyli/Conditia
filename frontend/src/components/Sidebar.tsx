@@ -1,4 +1,5 @@
 import { navIconMap, type NavIconName } from "./icons";
+import { canAccessNav, type UserRole } from "../auth/types";
 
 interface NavItem {
   id: string;
@@ -50,12 +51,17 @@ export function Sidebar({
   active,
   onSelect,
   trucksBadge,
+  userRole,
 }: {
   active: string;
   onSelect: (id: string) => void;
   trucksBadge?: number;
+  userRole: UserRole;
 }) {
-  const groups = buildGroups(trucksBadge);
+  const groups = buildGroups(trucksBadge).map((group) => ({
+    ...group,
+    items: group.items.filter((item) => canAccessNav(userRole, item.id)),
+  }));
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -98,16 +104,18 @@ export function Sidebar({
       </nav>
 
       <div className="sidebar__foot">
-        <button
-          className={`nav__item${active === "settings" ? " is-active" : ""}`}
-          onClick={() => onSelect("settings")}
-        >
-          {(() => {
-            const Icon = navIconMap.settings;
-            return <Icon size={18} />;
-          })()}
-          <span>Settings</span>
-        </button>
+        {canAccessNav(userRole, "settings") ? (
+          <button
+            className={`nav__item${active === "settings" ? " is-active" : ""}`}
+            onClick={() => onSelect("settings")}
+          >
+            {(() => {
+              const Icon = navIconMap.settings;
+              return <Icon size={18} />;
+            })()}
+            <span>Settings</span>
+          </button>
+        ) : null}
       </div>
     </aside>
   );

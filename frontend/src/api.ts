@@ -3,9 +3,48 @@
  * In dev, requests go through Vite's /api proxy (see vite.config.ts).
  * Override with VITE_API_URL if needed.
  */
+import type { AuthConfig, AuthUser, LoginResult } from "./auth/types";
+
 export const API_BASE: string =
   import.meta.env.VITE_API_URL ??
   (import.meta.env.DEV ? "/api" : "http://localhost:8000");
+
+let authTokenGetter: (() => string | null) | null = null;
+/** Synchronous token store — updated immediately on login (React state lags). */
+let authToken: string | null = null;
+
+export function setAuthToken(token: string | null) {
+  authToken = token;
+}
+
+export function setAuthTokenGetter(getter: () => string | null) {
+  authTokenGetter = getter;
+}
+
+function getToken(): string | null {
+  return authToken ?? authTokenGetter?.() ?? null;
+}
+
+function authHeaders(extra?: HeadersInit): HeadersInit {
+  const headers = new Headers(extra);
+  const token = getToken();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  return headers;
+}
+
+async function parseApiError(res: Response, fallback: string): Promise<string> {
+  const text = await res.text();
+  try {
+    const json = JSON.parse(text) as { detail?: string | { msg: string }[] };
+    if (typeof json.detail === "string") return json.detail;
+    if (Array.isArray(json.detail) && json.detail[0]?.msg) {
+      return json.detail[0].msg;
+    }
+  } catch {
+    /* plain text */
+  }
+  return text || fallback;
+}
 
 export interface ApiTruck {
   id: string;
@@ -110,14 +149,17 @@ export interface TruckCreatePayload {
 }
 
 async function getJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
-  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status}`);
+  const res = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
+  if (!res.ok) {
+    throw new Error(await parseApiError(res, `GET ${path} failed: ${res.status}`));
+  }
   return res.json() as Promise<T>;
 }
 
 async function postJson<T>(
   path: string,
-  query?: Record<string, boolean>
+  query?: Record<string, boolean>,
+  body?: unknown
 ): Promise<T> {
   const qs =
     query && Object.keys(query).length > 0
@@ -127,12 +169,34 @@ async function postJson<T>(
           )
         )}`
       : "";
-  const res = await fetch(`${API_BASE}${path}${qs}`, { method: "POST" });
+  const headers = authHeaders(
+    body !== undefined ? { "Content-Type": "application/json" } : undefined
+  );
+  const res = await fetch(`${API_BASE}${path}${qs}`, {
+    method: "POST",
+    headers,
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
   if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(detail || `POST ${path} failed: ${res.status}`);
+    throw new Error(await parseApiError(res, `POST ${path} failed: ${res.status}`));
   }
   return res.json() as Promise<T>;
+}
+
+export function getAuthConfig(): Promise<AuthConfig> {
+  return getJson<AuthConfig>("/auth/config");
+}
+
+export function getMe(): Promise<AuthUser> {
+  return getJson<AuthUser>("/auth/me");
+}
+
+export function syncSupabaseUser(): Promise<AuthUser> {
+  return postJson<AuthUser>("/auth/sync");
+}
+
+export function loginLocal(email: string, password: string): Promise<LoginResult> {
+  return postJson<LoginResult>("/auth/login", undefined, { email, password });
 }
 
 export function getTrucks(): Promise<ApiTruck[]> {
@@ -179,7 +243,7 @@ export function unseedAllData(clearStorage = true): Promise<ApiUnseedResult> {
 export async function createTruck(payload: TruckCreatePayload): Promise<ApiTruck> {
   const res = await fetch(`${API_BASE}/trucks`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error(`Create truck failed: ${res.status}`);
@@ -191,7 +255,7 @@ export async function createInspection(
 ): Promise<ApiInspection> {
   const res = await fetch(`${API_BASE}/inspections`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ truck_id: truckId, capture_source: "mobile" }),
   });
   if (!res.ok) throw new Error(`Create inspection failed: ${res.status}`);
@@ -206,6 +270,7 @@ export function uploadMedia(params: {
   onProgress?: (fraction: number) => void;
 }): Promise<void> {
   const { inspectionId, blob, angle, filename, onProgress } = params;
+  const token = getToken();
   return new Promise<void>((resolve, reject) => {
     const form = new FormData();
     form.append("files", blob, filename);
@@ -214,6 +279,7 @@ export function uploadMedia(params: {
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${API_BASE}/inspections/${inspectionId}/upload`);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);
     };

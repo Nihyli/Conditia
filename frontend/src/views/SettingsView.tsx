@@ -5,12 +5,16 @@ import {
   unseedAllData,
   type ApiDataStatus,
 } from "../api";
+import { useAuth } from "../auth/AuthContext";
+import { canAccessAdmin } from "../auth/types";
+import { PlaceholderView } from "./PlaceholderView";
 
 export function SettingsView({
   onDataChanged,
 }: {
   onDataChanged: () => void;
 }) {
+  const { user } = useAuth();
   const [status, setStatus] = useState<ApiDataStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<"seed" | "unseed" | null>(null);
@@ -70,6 +74,15 @@ export function SettingsView({
     } finally {
       setBusy(null);
     }
+  }
+
+  if (!user || !canAccessAdmin(user.role)) {
+    return (
+      <PlaceholderView
+        title="Settings"
+        description="Fleet preferences, user management, and integrations are coming soon. Contact an admin for data management."
+      />
+    );
   }
 
   return (

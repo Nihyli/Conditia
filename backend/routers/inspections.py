@@ -12,8 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters.drone import DroneAdapter
 from adapters.mobile import MobileAdapter
+from auth.dependencies import get_current_user, require_role
+from auth.roles import UserRole
 from database import get_db
-from models.db_models import Finding, Inspection, InspectionMedia, Truck
+from models.db_models import Finding, Inspection, InspectionMedia, Truck, User
 from models.schemas import (
     FindingOut,
     InspectionCreate,
@@ -27,7 +29,11 @@ from services.inspection_history import inspections_since_first_seen
 from services.media_sync import get_inspection_media_rows, sync_inspection_media_from_disk
 from utils import worst_severity
 
-router = APIRouter(prefix="/inspections", tags=["inspections"])
+router = APIRouter(
+    prefix="/inspections",
+    tags=["inspections"],
+    dependencies=[Depends(get_current_user)],
+)
 
 # Adapter registry. Adding a capture source = registering an adapter here.
 ADAPTERS = {
@@ -98,7 +104,9 @@ async def _build_summary(db: AsyncSession, inspection: Inspection) -> Inspection
 
 @router.post("", response_model=InspectionOut, status_code=201)
 async def create_inspection(
-    payload: InspectionCreate, db: AsyncSession = Depends(get_db)
+    payload: InspectionCreate,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_role(UserRole.INSPECTOR)),
 ):
     truck = await db.get(Truck, payload.truck_id)
     if truck is None:
@@ -106,7 +114,7 @@ async def create_inspection(
     inspection = Inspection(
         truck_id=payload.truck_id,
         capture_source=payload.capture_source,
-        created_by=payload.created_by,
+        created_by=user.id,
         status="pending",
     )
     db.add(inspection)
@@ -177,6 +185,7 @@ async def upload_media(
     gps_lng: float | None = Form(None),
     drone_flight_id: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(UserRole.INSPECTOR)),
 ):
     inspection = await db.get(Inspection, inspection_id)
     if inspection is None:

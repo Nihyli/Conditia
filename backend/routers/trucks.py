@@ -2,15 +2,25 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth.dependencies import get_current_user, require_role
+from auth.roles import UserRole
 from database import get_db
-from models.db_models import Inspection, Truck
+from models.db_models import Inspection, Truck, User
 from models.schemas import InspectionOut, TruckCreate, TruckOut
 
-router = APIRouter(prefix="/trucks", tags=["trucks"])
+router = APIRouter(
+    prefix="/trucks",
+    tags=["trucks"],
+    dependencies=[Depends(get_current_user)],
+)
 
 
 @router.post("", response_model=TruckOut, status_code=201)
-async def create_truck(payload: TruckCreate, db: AsyncSession = Depends(get_db)):
+async def create_truck(
+    payload: TruckCreate,
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(require_role(UserRole.FLEET_MANAGER)),
+):
     truck = Truck(**payload.model_dump())
     db.add(truck)
     await db.commit()

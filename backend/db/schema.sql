@@ -91,3 +91,25 @@ CREATE INDEX IF NOT EXISTS idx_inspections_truck ON inspections(truck_id);
 CREATE INDEX IF NOT EXISTS idx_media_inspection ON inspection_media(inspection_id);
 CREATE INDEX IF NOT EXISTS idx_findings_inspection ON findings(inspection_id);
 CREATE INDEX IF NOT EXISTS idx_findings_truck_lookup ON findings(finding_type, zone);
+
+-- ---------------------------------------------------------------------------
+-- Auth / users (local dev + Supabase profile mirror)
+-- ---------------------------------------------------------------------------
+
+CREATE TYPE app_role AS ENUM ('admin', 'fleet_manager', 'inspector', 'viewer');
+
+CREATE TABLE IF NOT EXISTS users (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email          TEXT UNIQUE NOT NULL,
+  password_hash  TEXT,
+  full_name      TEXT,
+  role           app_role NOT NULL DEFAULT 'viewer',
+  fleet_id       UUID REFERENCES fleets(id),
+  auth_provider  TEXT NOT NULL DEFAULT 'local',
+  created_at     TIMESTAMPTZ DEFAULT now()
+);
+
+-- Link inspections to the user who created them.
+ALTER TABLE inspections
+  ADD CONSTRAINT inspections_created_by_fkey
+  FOREIGN KEY (created_by) REFERENCES users(id);

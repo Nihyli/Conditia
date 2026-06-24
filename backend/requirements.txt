@@ -6,14 +6,14 @@ pydantic==2.10.3
 pydantic-settings==2.6.1
 
 # --- Database (async) ---
-# SQLite for local dev (default). For Supabase/Postgres, set DATABASE_URL to a
-# postgresql+asyncpg URL and add asyncpg below.
+# SQLite for local dev (default). For Supabase/Postgres set DATABASE_URL to a
+# postgres URL (the app normalizes it to the asyncpg driver automatically).
 SQLAlchemy==2.0.36
 aiosqlite==0.20.0
+asyncpg==0.30.0           # Postgres / Supabase driver
 greenlet>=3.0.0
 PyJWT==2.10.1
 bcrypt>=4.0.0
-# asyncpg==0.30.0          # uncomment for Postgres / Supabase
 
 # --- Optional integrations (uncomment when configured) ---
 # supabase==2.10.0          # Supabase Storage + Postgres in production

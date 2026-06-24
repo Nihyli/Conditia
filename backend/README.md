@@ -75,13 +75,40 @@ POST /inspections/{id}/upload  (multipart: files, capture_angle, capture_source)
 | GET  | `/inspections/{id}` | Inspection + findings (damage map) |
 | GET  | `/inspections/{id}/report` | Generated report |
 
-## Going to production (Supabase)
+## Database: SQLite (dev) → Supabase Postgres
 
-1. Run `db/schema.sql` in the Supabase SQL editor.
-2. Set `DATABASE_URL=postgresql+asyncpg://...` and uncomment `asyncpg` in `requirements.txt`.
-3. (Optional) Set `GOOGLE_APPLICATION_CREDENTIALS` + uncomment `google-cloud-vision`
-   to switch detection from stub to real, and `opencv-python-headless` for video frames.
-4. Swap `LocalStorageService` for a Supabase Storage implementation (same interface).
+The app runs on SQLite by default and on Supabase Postgres when `DATABASE_URL`
+points at one. The same SQLAlchemy models drive both — IDs are stored as text
+UUIDs and timestamps are timezone-aware, so no per-dialect code is needed.
+
+### Switching to Supabase Postgres
+
+1. `pip install -r requirements.txt` (now includes `asyncpg`).
+2. In Supabase → **Project Settings → Database**, copy a connection string and
+   set it as `DATABASE_URL` in `backend/.env`. Any standard format works — the
+   app rewrites it to the asyncpg driver and enables TLS automatically:
+   - **Session pooler** (recommended for dev): host `...pooler.supabase.com`, port `5432`.
+   - **Direct**: `db.<ref>.supabase.co:5432` (requires IPv6).
+   - **Transaction pooler**: port `6543` — also append `?prepared_statement_cache_size=0`.
+3. Verify connectivity and create the tables:
+   ```bash
+   python check_db.py        # prints server + row counts, runs create_all
+   ```
+4. (Optional) Seed the demo fleet into Postgres: `python seed.py --force`.
+
+Tables are created automatically on startup via SQLAlchemy `create_all`, so
+running `db/schema.sql` by hand is **optional** — that file is the canonical
+native-typed DDL (UUID/JSONB/enum/CHECK) kept for reference and RLS setup.
+
+Auth still works the same on Postgres: keep `AUTH_PROVIDER=local` for the demo
+accounts (re-seeded on first startup), or set `AUTH_PROVIDER=supabase` to
+validate Supabase-issued JWTs instead.
+
+## Other production switches
+
+- Set `GOOGLE_APPLICATION_CREDENTIALS` + add `google-cloud-vision` to switch
+  detection from stub to real, and `opencv-python-headless` for video frames.
+- Swap `LocalStorageService` for a Supabase Storage implementation (same interface).
 
 Detection is intentionally stubbed by default (returns no findings) so the full
 pipeline runs anywhere. Real detection accuracy is the Phase 2/3 focus.

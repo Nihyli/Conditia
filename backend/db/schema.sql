@@ -1,7 +1,15 @@
--- Conditia — production schema for Supabase / PostgreSQL.
--- Local dev uses SQLAlchemy create_all on SQLite; this file is the canonical
--- production DDL. Hardware-agnostic by design: capture_source is the only place
--- the system records what collected the footage.
+-- Conditia — canonical native-typed reference DDL for Supabase / PostgreSQL.
+--
+-- NOTE: The application creates all tables automatically on startup via
+-- SQLAlchemy create_all (text UUIDs + timezone-aware timestamps), so you do NOT
+-- need to run this file to bring the app up on Postgres — just set DATABASE_URL.
+-- This script is kept as the reference for a fully native schema (UUID / JSONB /
+-- enum / CHECK constraints) and as the place to layer RLS policies. Applying it
+-- and letting the ORM also manage tables would create type mismatches, so pick
+-- one approach per database.
+--
+-- Hardware-agnostic by design: capture_source is the only place the system
+-- records what collected the footage.
 
 -- Fleet accounts
 CREATE TABLE IF NOT EXISTS fleets (

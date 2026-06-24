@@ -12,10 +12,17 @@ Postgres/Supabase (production) without modification.
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import JSON, Float, ForeignKey, Integer, String
+from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
+
+# Portable column types so the same models run on SQLite (dev) and Postgres
+# (Supabase). Timestamps are timezone-aware (TIMESTAMPTZ on Postgres) to match
+# the tz-aware values produced by `_now()`; JSON becomes JSONB on Postgres.
+TZDateTime = DateTime(timezone=True)
+PortableJSON = JSON().with_variant(JSONB, "postgresql")
 
 
 def _uuid() -> str:
@@ -31,7 +38,7 @@ class Fleet(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(default=_now)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
 
 
 class User(Base):
@@ -46,7 +53,7 @@ class User(Base):
     fleet_id: Mapped[str | None] = mapped_column(ForeignKey("fleets.id"))
     # local | supabase
     auth_provider: Mapped[str] = mapped_column(String, default="local")
-    created_at: Mapped[datetime] = mapped_column(default=_now)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
 
 
 class Truck(Base):
@@ -59,7 +66,7 @@ class Truck(Base):
     model: Mapped[str | None] = mapped_column(String)
     year: Mapped[int | None] = mapped_column(Integer)
     license_plate: Mapped[str | None] = mapped_column(String)
-    created_at: Mapped[datetime] = mapped_column(default=_now)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
 
 
 class Inspection(Base):
@@ -67,8 +74,8 @@ class Inspection(Base):
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=_uuid)
     truck_id: Mapped[str] = mapped_column(ForeignKey("trucks.id"), nullable=False)
-    started_at: Mapped[datetime] = mapped_column(default=_now)
-    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    started_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
+    completed_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
     # pending | processing | complete | failed
     status: Mapped[str] = mapped_column(String, default="pending")
     # mobile | drone | fixed_camera | manual
@@ -88,7 +95,7 @@ class InspectionMedia(Base):
     capture_source: Mapped[str] = mapped_column(String, default="mobile")
     drone_flight_id: Mapped[str | None] = mapped_column(String, nullable=True)
     storage_path: Mapped[str] = mapped_column(String, nullable=False)
-    captured_at: Mapped[datetime] = mapped_column(default=_now)
+    captured_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
     gps_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     gps_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
 
@@ -110,7 +117,7 @@ class Finding(Base):
     # truck silhouette zone used by the dashboard damage map
     zone: Mapped[str | None] = mapped_column(String)
     location: Mapped[str | None] = mapped_column(String)
-    bounding_box: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    bounding_box: Mapped[dict | None] = mapped_column(PortableJSON, nullable=True)
     description: Mapped[str | None] = mapped_column(String)
     annotated_image_path: Mapped[str | None] = mapped_column(String)
     first_seen_inspection_id: Mapped[str | None] = mapped_column(
@@ -125,9 +132,9 @@ class Report(Base):
     inspection_id: Mapped[str] = mapped_column(
         ForeignKey("inspections.id"), nullable=False
     )
-    generated_at: Mapped[datetime] = mapped_column(default=_now)
+    generated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
     summary: Mapped[str | None] = mapped_column(String)
     total_findings: Mapped[int] = mapped_column(Integer, default=0)
     critical_findings: Mapped[int] = mapped_column(Integer, default=0)
     pdf_path: Mapped[str | None] = mapped_column(String, nullable=True)
-    raw_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    raw_json: Mapped[dict | None] = mapped_column(PortableJSON, nullable=True)

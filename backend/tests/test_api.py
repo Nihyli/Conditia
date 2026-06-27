@@ -1,24 +1,45 @@
 from __future__ import annotations
 
 import base64
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID
 
+import jwt
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import event, func, select
 
 from config import Settings, settings
 from database import SessionLocal, engine
+from domain import FleetRole
 from models.db_models import (
     AnalysisJob,
     Finding,
     Fleet,
+    FleetMembership,
     Inspection,
     InspectionMedia,
     Truck,
 )
 from services.analysis_jobs import resume_incomplete_analysis_jobs, run_analysis_job
+
+JWT_SECRET = "test-jwt-secret-at-least-32-characters-long"
+TEST_USER_ID = "22222222-2222-2222-2222-222222222222"
+
+
+def mint_test_token(user_id: str = TEST_USER_ID) -> str:
+    now = datetime.now(timezone.utc)
+    return jwt.encode(
+        {
+            "sub": user_id,
+            "aud": "authenticated",
+            "iat": now,
+            "exp": now + timedelta(hours=1),
+        },
+        JWT_SECRET,
+        algorithm="HS256",
+    )
 
 VALID_TRUCK = {
     "vin": "1FUJGLDR0CSBT0041",
@@ -397,3 +418,71 @@ async def test_inspection_list_uses_bounded_query_count(client: AsyncClient) -> 
     assert response.status_code == 200
     assert len(response.json()) == 3
     assert query_count <= 5
+
+
+@pytest.mark.asyncio
+async def test_jwt_auth_requires_membership(client: AsyncClient) -> None:
+    original_mode = settings.auth_mode
+    original_secret = settings.jwt_secret
+    settings.auth_mode = "jwt"
+    settings.jwt_secret = JWT_SECRET
+    token = mint_test_token()
+    headers = {"Authorization": f"Bearer {token}"}
+    try:
+        assert (await client.get("/trucks", headers=headers)).status_code == 403
+        assert (await client.get("/trucks")).status_code == 401
+
+        async with SessionLocal() as db:
+            fleet = Fleet(name="JWT Fleet")
+            db.add(fleet)
+            await db.flush()
+            db.add(
+                FleetMembership(
+                    fleet_id=fleet.id,
+                    user_id=TEST_USER_ID,
+                    role=FleetRole.INSPECTOR.value,
+                )
+            )
+            await db.commit()
+            fleet_id = fleet.id
+
+        me = await client.get("/auth/me", headers=headers)
+        assert me.status_code == 200
+        body = me.json()
+        assert body["user_id"] == TEST_USER_ID
+        assert body["fleet_id"] == fleet_id
+        assert body["role"] == "inspector"
+
+        trucks = await client.get("/trucks", headers=headers)
+        assert trucks.status_code == 200
+    finally:
+        settings.auth_mode = original_mode
+        settings.jwt_secret = original_secret
+
+
+@pytest.mark.asyncio
+async def test_viewer_cannot_register_trucks(client: AsyncClient) -> None:
+    original_mode = settings.auth_mode
+    original_secret = settings.jwt_secret
+    settings.auth_mode = "jwt"
+    settings.jwt_secret = JWT_SECRET
+    headers = {"Authorization": f"Bearer {mint_test_token()}"}
+    try:
+        async with SessionLocal() as db:
+            fleet = Fleet(name="Viewer Fleet")
+            db.add(fleet)
+            await db.flush()
+            db.add(
+                FleetMembership(
+                    fleet_id=fleet.id,
+                    user_id=TEST_USER_ID,
+                    role=FleetRole.VIEWER.value,
+                )
+            )
+            await db.commit()
+
+        denied = await client.post("/trucks", headers=headers, json=VALID_TRUCK)
+        assert denied.status_code == 403
+    finally:
+        settings.auth_mode = original_mode
+        settings.jwt_secret = original_secret

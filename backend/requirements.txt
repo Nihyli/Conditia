@@ -11,6 +11,7 @@ pydantic-settings==2.14.2
 anyio==4.12.1
 pillow==12.2.0
 supabase==2.31.0
+PyJWT[crypto]==2.12.0
 
 # --- Database (async) ---
 # SQLite for local dev (default). For Supabase/Postgres, set DATABASE_URL to a

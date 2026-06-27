@@ -6,9 +6,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
+from domain import FleetRole
 from models.db_models import Fleet, Inspection, Truck
 from models.schemas import InspectionOut, TruckCreate, TruckOut
-from security import Principal, require_api_access
+from security import Principal, require_api_access, require_roles
 
 router = APIRouter(prefix="/trucks", tags=["trucks"])
 
@@ -17,7 +18,7 @@ router = APIRouter(prefix="/trucks", tags=["trucks"])
 async def create_truck(
     payload: TruckCreate,
     db: AsyncSession = Depends(get_db),
-    principal: Principal = Depends(require_api_access),
+    principal: Principal = Depends(require_roles(FleetRole.ADMIN)),
 ):
     values = payload.model_dump(mode="json")
     if principal.fleet_id is not None:

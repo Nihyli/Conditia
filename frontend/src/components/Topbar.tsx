@@ -1,8 +1,11 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
 import { IconBell, IconChevronDown, IconPlus } from "./icons";
-import { ORG_NAME, USER_INITIALS } from "../data";
+import { ORG_NAME } from "../data";
 
 export function Topbar({ title }: { title: string }) {
+  const { initials, displayName, session, signOut } = useAuth();
+
   return (
     <header className="topbar">
       <div className="topbar__title">{title}</div>
@@ -23,8 +26,14 @@ export function Topbar({ title }: { title: string }) {
         <span className="icon-btn__dot" aria-hidden />
       </button>
 
-      <button className="avatar" aria-label="Account" disabled>
-        {USER_INITIALS}
+      <button
+        className="avatar"
+        aria-label={session?.auth_mode === "jwt" ? `Signed in as ${displayName}` : "Account"}
+        title={session?.auth_mode === "jwt" ? `${displayName} — click to sign out` : undefined}
+        onClick={session?.auth_mode === "jwt" ? signOut : undefined}
+        type="button"
+      >
+        {initials}
       </button>
     </header>
   );

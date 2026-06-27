@@ -50,14 +50,16 @@ export function Sidebar({
   active,
   onSelect,
   trucksBadge,
+  locked = false,
 }: {
   active: string;
   onSelect: (id: string) => void;
   trucksBadge?: number;
+  locked?: boolean;
 }) {
   const groups = buildGroups(trucksBadge);
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${locked ? " is-locked" : ""}`}>
       <div className="brand">
         <span className="brand__mark" aria-hidden>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
@@ -81,9 +83,12 @@ export function Sidebar({
               return (
                 <button
                   key={item.id}
+                  type="button"
                   className={`nav__item${active === item.id ? " is-active" : ""}`}
                   onClick={() => onSelect(item.id)}
                   aria-current={active === item.id ? "page" : undefined}
+                  disabled={locked}
+                  tabIndex={locked ? -1 : undefined}
                 >
                   <Icon size={18} />
                   <span>{item.label}</span>
@@ -99,8 +104,11 @@ export function Sidebar({
 
       <div className="sidebar__foot">
         <button
+          type="button"
           className={`nav__item${active === "settings" ? " is-active" : ""}`}
           onClick={() => onSelect("settings")}
+          disabled={locked}
+          tabIndex={locked ? -1 : undefined}
         >
           {(() => {
             const Icon = navIconMap.settings;

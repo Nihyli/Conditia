@@ -58,63 +58,26 @@ crash recovery.
 
 ## Security configuration
 
-`AUTH_MODE` picks how requests authenticate:
-
-| Mode | Use for |
-|---|---|
-| `disabled` | Local dev, no login |
-| `jwt` | Real users (local dev tokens or Supabase in prod) |
-| `api_key` | Scripts and integrations only — never the browser |
-
-### Local JWT
-
-Put this in `.env`:
-
-```dotenv
-AUTH_MODE=jwt
-JWT_SECRET=conditia-local-dev-jwt-secret-change-me-32chars
-```
-
-Then:
-
-```bash
-alembic upgrade head
-python scripts/mint_dev_token.py
-```
-
-Restart uvicorn after any `.env` change. Paste the printed `eyJ…` token into
-the frontend sign-in screen.
-
-The script wires up user `11111111-1111-1111-1111-111111111111` as an inspector
-on the demo fleet. Change role with `--role admin` or `--role viewer`.
-
-Verify:
-
-```bash
-curl -s -H "Authorization: Bearer <token>" http://127.0.0.1:8001/auth/me
-```
-
-### Production
+Development defaults to `AUTH_MODE=disabled`. Production requires:
 
 ```dotenv
 ENVIRONMENT=production
-AUTH_MODE=jwt
-JWT_SECRET=<Supabase project JWT secret>
+AUTH_MODE=api_key
+API_KEY=<at-least-32-random-characters>
+API_FLEET_ID=<fleet UUID assigned to this deployment>
 STORAGE_BACKEND=supabase
 SUPABASE_URL=https://<project>.supabase.co
-SUPABASE_KEY=<service role key>
+SUPABASE_KEY=<server-side service role key>
 SUPABASE_STORAGE_BUCKET=inspection-media
 DOCS_ENABLED=false
 CORS_ORIGINS=https://fleet.example.com
 ```
 
-Each Supabase user needs a `fleet_memberships` row. The API trusts the JWT for
-identity, the table for fleet + role.
-
-Machine clients can use `AUTH_MODE=api_key` with `X-API-Key` and `API_FLEET_ID`.
-That path has no user id — treat it as a service account.
-
-Clients send `Authorization: Bearer <token>`.
+Clients send the perimeter key as `X-API-Key`. This mode scopes data queries to
+one configured fleet, but does not provide per-user identity or roles. Put a
+fleet-aware identity gateway in front of the service before multi-tenant use.
+Production uses a private object bucket and short-lived authorized redirects;
+the application no longer exposes a static storage-directory mount.
 
 Uploads are signature checked, server-renamed, path-contained, streamed on a
 worker thread, and bounded by `MAX_UPLOAD_BYTES` and

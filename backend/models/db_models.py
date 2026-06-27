@@ -49,23 +49,6 @@ class Fleet(Base):
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
 
 
-class FleetMembership(Base):
-    __tablename__ = "fleet_memberships"
-    __table_args__ = (
-        CheckConstraint(
-            "role IN ('viewer','inspector','admin')",
-            name="ck_fleet_membership_role",
-        ),
-    )
-
-    fleet_id: Mapped[str] = mapped_column(
-        ForeignKey("fleets.id", ondelete="CASCADE"), primary_key=True
-    )
-    # Supabase auth.users id in production; plain UUID text locally.
-    user_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
-    role: Mapped[str] = mapped_column(String, nullable=False)
-
-
 class Truck(Base):
     __tablename__ = "trucks"
     __table_args__ = (CheckConstraint("year IS NULL OR year >= 1900", name="ck_truck_year"),)

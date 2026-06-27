@@ -3,8 +3,6 @@
  * In dev, requests go through Vite's /api proxy (see vite.config.ts).
  * Override with VITE_API_URL if needed.
  */
-import { authHeaders } from "./auth/session";
-
 export const API_BASE: string =
   import.meta.env.VITE_API_URL ?? "/api";
 
@@ -115,14 +113,7 @@ function detailMessage(payload: unknown, fallback: string): string {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers = {
-    ...authHeaders(),
-    ...(init?.headers as Record<string, string> | undefined),
-  };
-  const response = await fetchWithTimeout(`${API_BASE}${path}`, {
-    ...init,
-    headers,
-  });
+  const response = await fetchWithTimeout(`${API_BASE}${path}`, init);
   if (!response.ok) {
     const method = init?.method ?? "GET";
     throw new Error(
@@ -161,7 +152,7 @@ export function getFleetStats(): Promise<ApiFleetStats> {
 export function createTruck(payload: TruckCreatePayload): Promise<ApiTruck> {
   return requestJson<ApiTruck>("/trucks", {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
 }
@@ -169,7 +160,7 @@ export function createTruck(payload: TruckCreatePayload): Promise<ApiTruck> {
 export function createInspection(truckId: string): Promise<ApiInspection> {
   return requestJson<ApiInspection>("/inspections", {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ truck_id: truckId, capture_source: "mobile" }),
   });
 }
@@ -199,10 +190,6 @@ export function uploadMedia(params: {
 
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${API_BASE}/inspections/${inspectionId}/upload`);
-    const headers = authHeaders();
-    for (const [name, value] of Object.entries(headers)) {
-      xhr.setRequestHeader(name, value);
-    }
     xhr.timeout = 60_000;
     xhr.upload.onprogress = (e) => {
       if (e.lengthComputable && onProgress) onProgress(e.loaded / e.total);

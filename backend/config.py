@@ -21,10 +21,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
     environment: Literal["development", "test", "production"] = "development"
-    auth_mode: Literal["disabled", "api_key", "jwt"] = "disabled"
+    auth_mode: Literal["disabled", "api_key"] = "disabled"
     api_key: str | None = None
     api_fleet_id: UUID | None = None
-    jwt_secret: str | None = None
     docs_enabled: bool = True
 
     max_upload_bytes: int = 25 * 1024 * 1024
@@ -45,17 +44,9 @@ class Settings(BaseSettings):
             self.api_key is None or len(self.api_key) < 32
         ):
             raise ValueError("API_KEY must contain at least 32 characters")
-        if self.auth_mode == "jwt" and (
-            self.jwt_secret is None or len(self.jwt_secret) < 32
-        ):
-            raise ValueError("JWT_SECRET must contain at least 32 characters")
         if self.environment == "production":
             if self.auth_mode == "disabled":
                 raise ValueError("AUTH_MODE cannot be disabled in production")
-            if self.auth_mode == "api_key" and self.api_fleet_id is None:
-                raise ValueError("API_FLEET_ID is required when AUTH_MODE=api_key")
-            if self.auth_mode == "jwt" and self.jwt_secret is None:
-                raise ValueError("JWT_SECRET is required when AUTH_MODE=jwt")
             if not self.database_url.startswith(
                 ("postgresql+asyncpg://", "postgres+asyncpg://")
             ):
@@ -70,6 +61,8 @@ class Settings(BaseSettings):
                 raise ValueError("SEED_ON_STARTUP cannot be enabled in production")
             if self.docs_enabled:
                 raise ValueError("DOCS_ENABLED must be false in production")
+            if self.api_fleet_id is None:
+                raise ValueError("API_FLEET_ID is required in production")
             if not self.cors_list or any(
                 "localhost" in origin or "127.0.0.1" in origin
                 for origin in self.cors_list

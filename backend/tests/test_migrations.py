@@ -92,4 +92,4 @@ def test_legacy_sqlite_uuid_migration_preserves_relationships(tmp_path: Path) ->
     assert inspection_row == (inspection_id.replace("-", ""), truck_id.replace("-", ""))
     assert media_row == (media_id.replace("-", ""), inspection_id.replace("-", ""))
     assert violations == []
-    assert version == ("0005_fleet_memberships",)
+    assert version == ("0004_timestamptz",)

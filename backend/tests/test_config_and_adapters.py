@@ -40,7 +40,6 @@ def production_settings(**overrides) -> dict:
     ("overrides", "message"),
     [
         ({"auth_mode": "api_key", "api_key": "short"}, "at least 32"),
-        ({"auth_mode": "jwt", "jwt_secret": "short"}, "at least 32"),
         ({"max_upload_bytes": 0}, "must be positive"),
         (
             {"max_upload_bytes": 20, "max_request_bytes": 10},
@@ -64,7 +63,6 @@ def test_settings_reject_invalid_limits(overrides, message) -> None:
         ({"seed_on_startup": True}, "SEED_ON_STARTUP"),
         ({"docs_enabled": True}, "DOCS_ENABLED"),
         ({"api_fleet_id": None}, "API_FLEET_ID"),
-        ({"auth_mode": "jwt", "jwt_secret": None}, "JWT_SECRET"),
         ({"cors_origins": "http://localhost:5173"}, "deployed origins"),
     ],
 )

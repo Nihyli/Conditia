@@ -11,20 +11,11 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, select
 
 from database import SessionLocal, init_db, is_postgres, run_migrations
-from models.db_models import (
-    Finding,
-    Fleet,
-    FleetMembership,
-    Inspection,
-    InspectionMedia,
-    Report,
-    Truck,
-)
+from models.db_models import Finding, Fleet, Inspection, InspectionMedia, Report, Truck
 from services import report_generator
 
 _now = datetime.now(timezone.utc)
 DEMO_FLEET_NAME = "Midwest Freight Co."
-DEV_USER_ID = "11111111-1111-1111-1111-111111111111"
 
 TRUCKS = [
     {
@@ -91,7 +82,6 @@ async def _clear_fleet_data(db) -> None:
     await db.execute(delete(InspectionMedia))
     await db.execute(delete(Inspection))
     await db.execute(delete(Truck))
-    await db.execute(delete(FleetMembership))
     await db.execute(delete(Fleet))
     await db.commit()
 
@@ -161,14 +151,6 @@ async def _seed(db) -> None:
             )
         await db.flush()
         await report_generator.generate(db, inspection.id)
-
-    db.add(
-        FleetMembership(
-            fleet_id=fleet.id,
-            user_id=DEV_USER_ID,
-            role="inspector",
-        )
-    )
 
     await db.commit()
 

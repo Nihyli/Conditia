@@ -12,15 +12,6 @@ vi.mock("../api", () => ({
   mediaUrl: (id: string) => `/media/${id}`,
 }));
 
-vi.mock("../auth/AuthProvider", () => ({
-  useAuth: () => ({
-    initials: "IN",
-    displayName: "inspector",
-    session: { auth_mode: "disabled", user_id: null, fleet_id: null, role: "admin" },
-    signOut: vi.fn(),
-  }),
-}));
-
 const mockedInspections = vi.mocked(getInspections);
 const mockedStats = vi.mocked(getFleetStats);
 

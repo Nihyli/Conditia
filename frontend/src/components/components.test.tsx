@@ -11,6 +11,15 @@ import { Topbar } from "./Topbar";
 import { CaptureAngleDiagram } from "./capture/CaptureAngleDiagram";
 import { finding, inspection, photo, video } from "../test/fixtures";
 
+vi.mock("../auth/AuthProvider", () => ({
+  useAuth: () => ({
+    initials: "IN",
+    displayName: "inspector",
+    session: { auth_mode: "disabled", user_id: null, fleet_id: null, role: "admin" },
+    signOut: vi.fn(),
+  }),
+}));
+
 describe("shared dashboard components", () => {
   it("renders stat trends and falls back to the truck icon", () => {
     render(
@@ -55,7 +64,7 @@ describe("shared dashboard components", () => {
       "/capture"
     );
     expect(screen.getByRole("button", { name: /notifications/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /account/i })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /account/i })).toBeInTheDocument();
   });
 });
 

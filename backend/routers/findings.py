@@ -6,10 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from domain import FindingStatus, Severity
+from domain import FindingStatus, FleetRole, Severity
 from models.db_models import Finding, Inspection, Truck
 from models.schemas import FindingOut, FindingUpdate
-from security import Principal, require_api_access
+from security import Principal, require_api_access, require_roles
 
 router = APIRouter(prefix="/findings", tags=["findings"])
 
@@ -42,7 +42,7 @@ async def update_finding(
     finding_id: UUID,
     payload: FindingUpdate,
     db: AsyncSession = Depends(get_db),
-    principal: Principal = Depends(require_api_access),
+    principal: Principal = Depends(require_roles(FleetRole.INSPECTOR, FleetRole.ADMIN)),
 ):
     statement = select(Finding).where(Finding.id == str(finding_id))
     if principal.fleet_id is not None:

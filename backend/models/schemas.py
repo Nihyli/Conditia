@@ -164,3 +164,10 @@ class FleetStatsOut(BaseModel):
     inspections_pending: int
     inspections_complete_today: int
     open_findings: int
+
+
+class AuthSessionOut(BaseModel):
+    auth_mode: str
+    user_id: str | None = None
+    fleet_id: str | None = None
+    role: str | None = None

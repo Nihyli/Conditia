@@ -97,7 +97,7 @@ For an existing pre-Alembic database, back it up and review/stamp/migrate it
 explicitly; do not blindly run the initial migration over existing tables. The
 prototype compatibility path is `alembic stamp 0001_initial` followed by
 `alembic upgrade head` after the backup and schema have been verified.
-Revision `0003_normalize_legacy_sqlite_uuids` also normalizes prototype SQLite
+Revision `0003_normalize_sqlite_uuids` also normalizes prototype SQLite
 UUID text without deleting rows so ORM relationships continue to resolve.
 `db/schema.sql` includes the additional Supabase membership/RLS policies.
 

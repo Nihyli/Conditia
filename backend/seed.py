@@ -1,21 +1,21 @@
 """Seed a demo fleet so the API returns meaningful data immediately.
 
-Mirrors the dashboard's mock fleet (Midwest Freight Co.). Runs automatically on
-startup when SEED_ON_STARTUP=true and the DB is empty, or manually:
-
     python seed.py
+    python seed.py --force
 """
 
+import argparse
 import asyncio
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
-from database import SessionLocal, init_db
-from models.db_models import Finding, Fleet, Inspection, Truck
+from database import SessionLocal, init_db, is_postgres, run_migrations
+from models.db_models import Finding, Fleet, Inspection, InspectionMedia, Report, Truck
 from services import report_generator
 
 _now = datetime.now(timezone.utc)
+DEMO_FLEET_NAME = "Midwest Freight Co."
 
 TRUCKS = [
     {
@@ -76,6 +76,16 @@ TRUCKS = [
 ]
 
 
+async def _clear_fleet_data(db) -> None:
+    await db.execute(delete(Finding))
+    await db.execute(delete(Report))
+    await db.execute(delete(InspectionMedia))
+    await db.execute(delete(Inspection))
+    await db.execute(delete(Truck))
+    await db.execute(delete(Fleet))
+    await db.commit()
+
+
 async def seed_if_empty() -> None:
     async with SessionLocal() as db:
         existing = await db.execute(select(Fleet).limit(1))
@@ -84,8 +94,21 @@ async def seed_if_empty() -> None:
         await _seed(db)
 
 
+async def seed_demo(*, force: bool = False) -> None:
+    async with SessionLocal() as db:
+        if force:
+            await _clear_fleet_data(db)
+        else:
+            existing = await db.execute(select(Fleet).limit(1))
+            if existing.scalar_one_or_none() is not None:
+                print("Database already has data. Use --force to replace it.")
+                return
+        await _seed(db)
+    print(f'Demo fleet "{DEMO_FLEET_NAME}" seeded ({len(TRUCKS)} trucks).')
+
+
 async def _seed(db) -> None:
-    fleet = Fleet(name="Midwest Freight Co.")
+    fleet = Fleet(name=DEMO_FLEET_NAME)
     db.add(fleet)
     await db.flush()
 
@@ -123,7 +146,6 @@ async def _seed(db) -> None:
                     zone=f["zone"],
                     location=f["location"],
                     description=f["title"],
-                    # ago==0 => first seen this inspection; else a prior one.
                     first_seen_inspection_id=inspection.id,
                 )
             )
@@ -134,9 +156,16 @@ async def _seed(db) -> None:
 
 
 async def _main() -> None:
-    await init_db()
-    await seed_if_empty()
-    print("Seed complete.")
+    parser = argparse.ArgumentParser(description="Seed Conditia demo fleet")
+    parser.add_argument("--force", action="store_true", help="Clear existing data first")
+    args = parser.parse_args()
+
+    if is_postgres():
+        run_migrations()
+    else:
+        await init_db()
+
+    await seed_demo(force=args.force)
 
 
 if __name__ == "__main__":

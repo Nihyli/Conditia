@@ -14,6 +14,7 @@ from uuid import uuid4
 from sqlalchemy import (
     JSON,
     CheckConstraint,
+    DateTime,
     Float,
     ForeignKey,
     Index,
@@ -25,6 +26,11 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
+
+# Timezone-aware timestamps (TIMESTAMPTZ on Postgres) to match the tz-aware UTC
+# values from `_now()`. asyncpg rejects writing aware datetimes into a naive
+# TIMESTAMP column; SQLite ignores the flag.
+TZDateTime = DateTime(timezone=True)
 
 
 def _uuid() -> str:
@@ -40,7 +46,7 @@ class Fleet(Base):
 
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     name: Mapped[str] = mapped_column(String, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(default=_now)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
 
 
 class Truck(Base):
@@ -56,7 +62,7 @@ class Truck(Base):
     model: Mapped[str | None] = mapped_column(String)
     year: Mapped[int | None] = mapped_column(Integer)
     license_plate: Mapped[str | None] = mapped_column(String)
-    created_at: Mapped[datetime] = mapped_column(default=_now)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
 
 
 class Inspection(Base):
@@ -77,8 +83,8 @@ class Inspection(Base):
     truck_id: Mapped[str] = mapped_column(
         ForeignKey("trucks.id", ondelete="CASCADE"), nullable=False
     )
-    started_at: Mapped[datetime] = mapped_column(default=_now)
-    completed_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    started_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
+    completed_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
     status: Mapped[str] = mapped_column(String, default="uploading")
     # mobile | drone | fixed_camera | manual
     capture_source: Mapped[str] = mapped_column(String, default="mobile")
@@ -118,7 +124,7 @@ class InspectionMedia(Base):
     capture_source: Mapped[str] = mapped_column(String, default="mobile")
     drone_flight_id: Mapped[str | None] = mapped_column(String, nullable=True)
     storage_path: Mapped[str] = mapped_column(String, nullable=False)
-    captured_at: Mapped[datetime] = mapped_column(default=_now)
+    captured_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
     gps_lat: Mapped[float | None] = mapped_column(Float, nullable=True)
     gps_lng: Mapped[float | None] = mapped_column(Float, nullable=True)
 
@@ -141,8 +147,10 @@ class AnalysisJob(Base):
     status: Mapped[str] = mapped_column(String, default="pending")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(default=_now)
-    updated_at: Mapped[datetime] = mapped_column(default=_now, onupdate=_now)
+    created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        TZDateTime, default=_now, onupdate=_now
+    )
 
 
 class Finding(Base):
@@ -180,7 +188,7 @@ class Finding(Base):
     severity: Mapped[str] = mapped_column(String)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     status: Mapped[str] = mapped_column(String, default="open")
-    resolved_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
     resolution_notes: Mapped[str | None] = mapped_column(String, nullable=True)
     # truck silhouette zone used by the dashboard damage map
     zone: Mapped[str | None] = mapped_column(String)
@@ -203,7 +211,7 @@ class Report(Base):
     inspection_id: Mapped[str] = mapped_column(
         ForeignKey("inspections.id", ondelete="CASCADE"), nullable=False
     )
-    generated_at: Mapped[datetime] = mapped_column(default=_now)
+    generated_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
     summary: Mapped[str | None] = mapped_column(String)
     total_findings: Mapped[int] = mapped_column(Integer, default=0)
     critical_findings: Mapped[int] = mapped_column(Integer, default=0)

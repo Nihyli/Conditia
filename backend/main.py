@@ -10,7 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
-from database import get_db, init_db
+from database import get_db, init_db, is_postgres, run_migrations
 from routers import findings, fleet, inspections, media, reports, trucks
 from security import require_api_access
 from services.analysis_jobs import resume_incomplete_analysis_jobs
@@ -30,7 +30,10 @@ async def lifespan(app: FastAPI):
         },
     )
     if settings.environment != "production":
-        await init_db()
+        if is_postgres():
+            run_migrations()
+        else:
+            await init_db()
     if settings.seed_on_startup:
         from seed import seed_if_empty
 

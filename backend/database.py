@@ -101,9 +101,40 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    """Create tables for local dev. Production uses db/schema.sql via Supabase."""
-    # Import models so they register on Base.metadata before create_all.
+    """Bootstrap SQLite for local dev. Postgres/Supabase schema is Alembic-managed."""
     from models import db_models  # noqa: F401
+
+    if not settings.database_url.startswith("sqlite"):
+        return
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+
+
+def run_migrations() -> None:
+    """Apply Alembic migrations through head (Postgres / Supabase).
+
+    Runs in a subprocess so it works from FastAPI's async lifespan (Alembic's
+    env.py uses asyncio.run, which cannot nest inside uvicorn's event loop).
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    backend_dir = Path(__file__).resolve().parent
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=backend_dir,
+        capture_output=True,
+        text=True,
+    )
+    if result.stdout.strip():
+        print(result.stdout.strip())
+    if result.returncode != 0:
+        detail = (result.stderr or result.stdout or "unknown error").strip()
+        raise RuntimeError(f"alembic upgrade head failed:\n{detail}")
+
+
+def is_postgres() -> bool:
+    url = settings.database_url
+    return url.startswith("postgres") or url.startswith("postgresql")

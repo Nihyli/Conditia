@@ -11,7 +11,7 @@ from collections.abc import Sequence
 
 from alembic import op
 
-revision: str = "0003_normalize_legacy_sqlite_uuids"
+revision: str = "0003_normalize_sqlite_uuids"
 down_revision: str | Sequence[str] | None = "0002_legacy_compatibility"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

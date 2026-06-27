@@ -7,6 +7,13 @@ import {
   setAccessToken,
 } from "./session";
 
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 describe("session storage helpers", () => {
   beforeEach(() => {
     sessionStorage.clear();
@@ -42,16 +49,14 @@ describe("fetchSession", () => {
   });
 
   it("returns the session payload on success", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => ({
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({
         auth_mode: "jwt",
         user_id: "user-1",
         fleet_id: "fleet-1",
         role: "admin",
-      }),
-    } as Response);
+      })
+    );
 
     await expect(fetchSession()).resolves.toEqual({
       auth_mode: "jwt",
@@ -62,32 +67,21 @@ describe("fetchSession", () => {
   });
 
   it("throws when the auth endpoint is missing", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: false,
-      status: 404,
-    } as Response);
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 404 }));
 
     await expect(fetchSession()).rejects.toThrow(/auth endpoint missing/i);
   });
 
   it("uses API error detail when sign-in fails", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: false,
-      status: 401,
-      json: async () => ({ detail: "Invalid token" }),
-    } as Response);
+    vi.mocked(fetch).mockResolvedValueOnce(
+      jsonResponse({ detail: "Invalid token" }, 401)
+    );
 
     await expect(fetchSession()).rejects.toThrow("Invalid token");
   });
 
   it("falls back to a status message when error bodies are unreadable", async () => {
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      json: async () => {
-        throw new Error("not json");
-      },
-    } as Response);
+    vi.mocked(fetch).mockResolvedValueOnce(new Response("not json", { status: 500 }));
 
     await expect(fetchSession()).rejects.toThrow("Sign-in failed (500)");
   });

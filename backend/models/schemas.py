@@ -99,7 +99,6 @@ class MediaOut(BaseModel):
     capture_angle: CaptureAngle | None
     capture_source: CaptureSource
     drone_flight_id: str | None
-    storage_path: str
     captured_at: datetime
 
 

@@ -33,7 +33,7 @@ async def list_findings(
         stmt = stmt.where(Finding.severity == severity.value)
     if status:
         stmt = stmt.where(Finding.status == status.value)
-    result = await db.execute(stmt.limit(limit))
+    result = await db.execute(stmt.order_by(Finding.id.asc()).limit(limit))
     return result.scalars().all()
 
 

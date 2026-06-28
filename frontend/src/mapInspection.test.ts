@@ -45,6 +45,16 @@ describe("mapInspectionSummary", () => {
     expect(result.findings[0].location).toBe("Unknown location");
   });
 
+  it("normalizes rear to trailer_rear", () => {
+    const result = mapInspectionSummary(
+      inspection({
+        findings: [{ ...inspection().findings[0], zone: "rear" }],
+      })
+    );
+
+    expect(result.findings[0].zone).toBe("trailer_rear");
+  });
+
   it("rejects unknown status, source, and severity contract values", () => {
     expect(() =>
       mapInspectionSummary(inspection({ status: "mystery" }))

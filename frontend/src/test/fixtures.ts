@@ -16,7 +16,6 @@ export const photo: InspectionMedia = {
   id: "media-photo",
   mediaType: "photo",
   captureAngle: "front",
-  storagePath: "inspection/front/photo.png",
   capturedAt: "2026-06-21T12:00:00Z",
 };
 
@@ -24,7 +23,6 @@ export const video: InspectionMedia = {
   id: "media-video",
   mediaType: "video",
   captureAngle: "rear",
-  storagePath: "inspection/rear/video.webm",
   capturedAt: "2026-06-21T12:01:00Z",
 };
 
@@ -82,7 +80,6 @@ export function apiInspection(
         media_type: "photo",
         capture_angle: "front",
         capture_source: "mobile",
-        storage_path: "inspection/front/photo.png",
         captured_at: "2026-06-21T12:00:00Z",
       },
     ],

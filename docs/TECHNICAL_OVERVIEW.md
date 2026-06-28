@@ -37,13 +37,13 @@ conditia/
 ├── frontend/   React 18 + TypeScript + Vite dashboard & guided capture (Vitest)
 │   └── proxies /api → http://127.0.0.1:8001 in dev
 ├── backend/    FastAPI + Pydantic + async SQLAlchemy
-│   ├── routers/      HTTP API (trucks, inspections, media, findings, fleet, reports)
+│   ├── routers/      HTTP API (auth, fleet, trucks, inspections, media, findings, reports)
 │   ├── services/     analysis pipeline, jobs, change detection, reports, storage, vision
 │   ├── adapters/     capture-source adapters (mobile implemented; registry-based)
 │   ├── models/       SQLAlchemy ORM (db_models) + Pydantic schemas
-│   ├── migrations/   Alembic migration chain (0001 → 0004)
+│   ├── migrations/   Alembic migration chain (0001 → 0005)
 │   ├── domain.py     typed enums shared across API/persistence/services
-│   ├── security.py   API-key perimeter guard
+│   ├── security.py   auth modes (disabled/api_key/jwt) + role guards
 │   ├── config.py     env-driven settings + production-posture validation
 │   └── database.py   async engine, URL normalization, migration runner
 └── docs/, data/      design context & code-review history
@@ -85,10 +85,15 @@ primary keys so the same models run on SQLite and PostgreSQL:
   powers change detection.
 - **`reports`** — generated per-inspection summary (`total_findings`,
   `critical_findings`, `summary`, `raw_json`, optional `pdf_path`).
+- **`fleet_memberships`** — composite-key (`fleet_id`, `user_id`) mapping of a
+  JWT user to a fleet and a `role` (CHECK-constrained to
+  `viewer`/`inspector`/`admin`). This is the source of truth for user identity
+  and authorization, looked up server-side on each request.
 
 Domain enums live in `domain.py` (`CaptureSource`, `CaptureAngle`,
 `InspectionStatus`, `AnalysisJobStatus`, `FindingType`, `FindingStatus`,
-`Severity`) and are enforced both in Pydantic and via DB CHECK constraints.
+`Severity`, `FleetRole`) and are enforced both in Pydantic and via DB CHECK
+constraints.
 
 ### 3.3 The inspection lifecycle
 
@@ -148,26 +153,45 @@ its severity always requires human review.
 
 ### 3.7 API surface
 
-All routes are mounted under an API router guarded by `require_api_access`:
+Meta routes (`/health`, `/ready`, `/`) are unguarded; all `/auth`, `/fleet`,
+`/trucks`, `/inspections`, `/inspection-media`, `/findings`, and `/reports`
+routes are mounted under an API router guarded by `require_api_access` (mutating
+finding routes add `require_roles`):
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/health` | Liveness + build/feature info (no DB) |
 | GET | `/ready` | Readiness — executes `SELECT 1` against the DB |
+| GET | `/auth/me` | Current principal: auth mode, user id, fleet id, role |
+| GET | `/fleet/stats` | KPI counts (trucks, today/pending/complete, open findings) |
 | POST | `/trucks` / GET `/trucks` | Register / list assets (fleet-scoped, bounded) |
+| GET | `/trucks/{id}` / `/trucks/{id}/inspections` | Asset detail / its inspections |
 | POST | `/inspections` | Create an `uploading` inspection |
 | POST | `/inspections/{id}/upload` | Upload verified media |
 | POST | `/inspections/{id}/finalize` | Submit once for analysis |
 | GET | `/inspections` / `/inspections/{id}` | Inspection summaries / detail (findings + media) |
-| GET | `/reports/{inspection_id}` | Structured report once generated |
+| GET | `/inspections/{id}/findings` / `/inspections/{id}/media` | Per-inspection findings / media |
+| GET | `/inspection-media/{id}/content` | Authorized media delivery (local file or signed redirect) |
+| GET | `/findings` | List findings (filter by severity/status, fleet-scoped) |
+| PATCH | `/findings/{id}` | Update finding status/notes (`inspector`/`admin` only) |
+| GET | `/reports` / `/reports/{inspection_id}` | List reports / structured report once generated |
 
 ### 3.8 Security & hardening
 
-- **Perimeter auth (`security.py`):** `AUTH_MODE=api_key` checks an `X-API-Key`
-  header with constant-time comparison and scopes queries to one configured
-  `API_FLEET_ID`. This is a **service perimeter, not user identity** — there are
-  no per-user accounts, roles, or audit logs yet. (In development `AUTH_MODE`
-  defaults to `disabled`.)
+- **Auth & roles (`security.py`):** `AUTH_MODE` selects one of three strategies,
+  each resolving to a `Principal(user_id, fleet_id, role)`:
+  - `jwt` — verifies a bearer token (HS256, `authenticated` audience, required
+    `sub`/`exp`), then looks up the user's `fleet_memberships` row to derive the
+    fleet scope and `FleetRole`. This is **real user identity with roles**, not
+    just a perimeter. A token without a membership row is rejected (403).
+  - `api_key` — constant-time `X-API-Key` check scoped to one configured
+    `API_FLEET_ID`, with no user id; a service account (role `admin`).
+  - `disabled` — development only; every request runs as `admin` with no scope.
+
+  `require_roles(*roles)` layers role authorization on top (e.g. only
+  `inspector`/`admin` may mutate findings). Cross-tenant PostgreSQL RLS policies
+  are still defined only in `db/schema.sql` (not yet in Alembic), and there is no
+  immutable audit log yet.
 - **Upload safety:** files are signature-checked, server-renamed to opaque keys,
   path-contained, streamed on a worker thread, and bounded by `MAX_UPLOAD_BYTES`,
   `MAX_FILES_PER_UPLOAD`, `MAX_REQUEST_BYTES`, and `MAX_IMAGE_PIXELS`
@@ -209,7 +233,8 @@ connection string "just works":
 
 ### 4.2 Schema management
 
-- **Alembic owns the PostgreSQL schema** (`migrations/`, chain `0001` → `0004`).
+- **Alembic owns the PostgreSQL schema** (`migrations/`, chain `0001` → `0005`;
+  `0005` adds the `fleet_memberships` table that backs JWT user authorization).
   `migrations/env.py` builds its engine from the same `build_async_url()` so
   migrations connect identically to runtime.
 - On **SQLite dev**, `init_db()` uses `create_all`. On **PostgreSQL**, `init_db`
@@ -225,11 +250,22 @@ connection string "just works":
 
 ## 5. Frontend
 
-- **React 18 + TypeScript + Vite.** Routes: `/` (dashboard), `/capture` and
-  `/capture/:truckId` (guided capture), with a catch-all redirect.
-- **Dashboard** is a light, scannable fleet-operations console: KPI stat row, a
+- **React 18 + TypeScript + Vite.** An `AppLayout` shell (sidebar + topbar)
+  hosts the console routes: `/` (overview), `/trucks` and `/trucks/:truckId`,
+  `/inspections` and `/inspections/:inspectionId`, `/findings`, `/reports` and
+  `/reports/:inspectionId`, `/history`, `/integrations/samsara`, and
+  `/settings`. Guided capture (`/capture`, `/capture/:truckId`) renders outside
+  the shell, and a catch-all redirects to `/`.
+- **Auth (`auth/AuthProvider`, `pages/LoginPage`):** on load the app calls
+  `/auth/me`; in `jwt` mode a user without a session sees the token sign-in
+  screen, and the pasted bearer token is stored in `sessionStorage` and attached
+  to API requests. The **Settings** page surfaces the signed-in account (user,
+  fleet, role, auth mode), role capabilities, and sign-out.
+- **Overview** is a light, scannable fleet-operations console: KPI stat row, a
   recent-inspections list, and a per-truck **damage map** with severity-colored
-  zones plus findings annotated with "first/previously detected."
+  zones plus findings annotated with "first/previously detected." Findings,
+  reports, trucks, and history each have dedicated list/detail pages; Samsara
+  telematics integration is a documented placeholder.
 - **Guided capture** (`features/capture/useCaptureSession`,
   `components/capture/*`) walks a phone user through the required angles and
   uploads media.
@@ -298,21 +334,27 @@ broken, runs migrations, and starts the server.
 
 **Working:** guided mobile capture, structured upload, the explicit inspection
 lifecycle, durable analysis jobs with crash recovery, change-over-time
-detection, the fleet dashboard with KPIs and damage map, and structured report
-generation. The backend runs on Supabase PostgreSQL via the asyncpg/pooler
-normalization described above.
+detection, the fleet console (overview KPIs and damage map, trucks, inspections,
+findings with role-gated resolution, reports, history, settings/account), JWT
+user identity with fleet-membership roles, and structured report generation. The
+backend runs on Supabase PostgreSQL via the asyncpg/pooler normalization
+described above.
 
 **Known gaps / production prerequisites:**
 
 1. **Validated damage model** — current detection is a placeholder; everything
    un-analyzed routes to `review_required`.
-2. **User identity & multi-tenancy** — API-key perimeter only; no per-user
-   accounts, roles, or audit logs.
+2. **Tenant isolation in migrations & audit log** — JWT identity, roles, and the
+   `fleet_memberships` table now exist, but cross-tenant PostgreSQL RLS still
+   lives only in `db/schema.sql` (not Alembic), and there is no immutable audit
+   log of who changed what.
 3. **Durable external job infrastructure** — the in-process worker needs to
    become an isolated, retrying worker for production.
 4. **Production object-storage adapter** — finalize the Supabase Storage path
    and authorized media delivery.
-5. **Reports/PDF export and some dashboard areas** — partially implemented.
+5. **Reports/PDF export, telematics, and org management** — PDF export, the
+   Samsara integration, and in-console user/role/API-key management are not yet
+   built.
 
 The guiding rule for closing these gaps is unchanged: **prefer truthful,
 review-gated behavior over fabricated certainty**, because Conditia's value is

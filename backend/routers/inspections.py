@@ -109,7 +109,9 @@ async def inspection_findings(
         raise HTTPException(404, "Inspection not found")
     inspection_key = str(inspection_id)
     result = await db.execute(
-        select(Finding).where(Finding.inspection_id == inspection_key)
+        select(Finding)
+        .where(Finding.inspection_id == inspection_key)
+        .order_by(Finding.id.asc())
     )
     return result.scalars().all()
 

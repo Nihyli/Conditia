@@ -151,10 +151,15 @@ What is intentionally **not** production-ready yet:
   placeholder; experimental image-label detection exists but always routes to
   human review. A trained, calibrated damage model is a prerequisite before the
   automated findings can be trusted commercially.
-- **Single-tenant security perimeter.** Access is currently a service-level API
-  key scoped to one fleet — there is no per-user identity, roles, or audit log
-  yet. Real multi-tenant customer accounts are future work.
-- **Reporting/PDF export and some dashboard areas** are partially built.
+- **Identity exists, full multi-tenancy does not.** Per-user sign-in (JWT) with
+  fleet-scoped roles (viewer / inspector / admin) is implemented, and the
+  console shows the signed-in account and gates actions by role. What's still
+  missing for a public multi-tenant SaaS: database-enforced cross-tenant
+  isolation (row-level security in migrations), an immutable audit log, and
+  self-service organization/user management.
+- **Reporting/PDF export, telematics, and org management** are partially built —
+  structured reports exist, but PDF export, the Samsara integration, and
+  in-app user/role administration are not.
 
 These are deliberate, documented boundaries — the engineering posture is to be
 truthful about what is and isn't ready rather than overstate capability, which
@@ -166,8 +171,10 @@ matches the product's whole premise of being a trustworthy system of record.
 
 1. **Validated damage detection** — the single biggest unlock for commercial
    trust and automation.
-2. **Multi-tenant accounts, identity, and roles** — turn the single-fleet
-   perimeter into real customer organizations.
+2. **Full multi-tenancy** — per-user identity and roles now exist; the remaining
+   work is database-enforced tenant isolation, audit history, and self-service
+   organization/user management to turn the single-fleet setup into real
+   customer organizations.
 3. **Reports & exports** — shareable, defensible condition reports (PDF) for
    liability and compliance use.
 4. **Additional capture sources** — drone and fixed-camera ingestion for yards.

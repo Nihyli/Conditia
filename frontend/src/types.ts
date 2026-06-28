@@ -23,7 +23,6 @@ export interface InspectionMedia {
   id: string;
   mediaType: "photo" | "video";
   captureAngle: string | null;
-  storagePath: string;
   capturedAt: string;
 }
 

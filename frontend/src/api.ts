@@ -67,7 +67,6 @@ export interface ApiMedia {
   media_type: "photo" | "video";
   capture_angle: string | null;
   capture_source: string;
-  storage_path: string;
   captured_at: string;
 }
 

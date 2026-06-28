@@ -8,11 +8,15 @@ import {
 } from "../severity";
 import { IconDownload } from "./icons";
 import { InspectionMediaViewer } from "./InspectionMediaViewer";
+import {
+  silhouetteSeverity,
+  silhouetteZones,
+} from "./truckSilhouetteZones";
 
 const zoneCaption: Record<DamageZone, string> = {
   front: "front",
   cab: "cab",
-  trailer_front: "front",
+  trailer_front: "trailer",
   trailer_mid: "mid",
   trailer_rear: "rear",
   passenger_side: "side",
@@ -20,23 +24,8 @@ const zoneCaption: Record<DamageZone, string> = {
   unknown: "unknown",
 };
 
-// Clickable/paintable regions over the truck silhouette (side profile, cab right).
-const zoneBoxes: { zone: DamageZone; x: number; w: number; cx: number }[] = [
-  { zone: "trailer_rear", x: 34, w: 104, cx: 86 },
-  { zone: "trailer_mid", x: 138, w: 104, cx: 190 },
-  { zone: "trailer_front", x: 242, w: 104, cx: 294 },
-  { zone: "cab", x: 384, w: 132, cx: 446 },
-];
-
-function zoneSeverity(findings: Finding[], zone: DamageZone): Severity | null {
-  const inZone = findings.filter((f) => f.zone === zone);
-  if (inZone.length === 0) return null;
-  return inZone.reduce<Severity>(
-    (worst, f) =>
-      severityRank[f.severity] > severityRank[worst] ? f.severity : worst,
-    "clear"
-  );
-}
+const CAB_PATH =
+  "M355 152 L355 90 Q358 80 375 72 L430 60 Q468 54 498 66 L518 84 Q526 96 528 112 L528 152 Z";
 
 function ChangeLine({ ago }: { ago: number }) {
   if (ago === 0) {
@@ -56,61 +45,171 @@ function ChangeLine({ ago }: { ago: number }) {
 }
 
 function TruckSilhouette({ findings }: { findings: Finding[] }) {
+  const cabSev = silhouetteSeverity(findings, "cab");
+  const trailerZones = silhouetteZones.filter((z) => z.zone !== "cab");
+
   return (
-    <svg className="dmap__svg" viewBox="0 0 560 200" role="img" aria-label="Truck damage map">
-      {/* zone tints */}
-      {zoneBoxes.map(({ zone, x, w }) => {
-        const sev = zoneSeverity(findings, zone);
+    <svg className="dmap__svg" viewBox="0 0 560 210" role="img" aria-label="Truck damage map">
+      {/* Trailer zone tints (under the outline) */}
+      {trailerZones.map(({ zone, x, w }) => {
+        const sev = silhouetteSeverity(findings, zone);
         return (
           <rect
             key={zone}
             x={x}
-            y={62}
+            y={58}
             width={w}
-            height={86}
+            height={94}
             rx={6}
             fill={sev ? severityFill[sev] : "var(--surface-2)"}
             stroke={sev ? severityColor[sev] : "var(--border)"}
-            strokeWidth={sev ? 1.5 : 1}
-            opacity={sev ? 1 : 0.6}
+            strokeWidth={sev ? 2 : 1}
+            opacity={sev ? 1 : 0.55}
           />
         );
       })}
 
-      {/* trailer outline */}
-      <rect x={30} y={58} width={320} height={94} rx={8} fill="none" stroke="var(--border-strong)" strokeWidth={2} />
-
-      {/* cab body */}
-      <path
-        d="M384 152 V96 q0-10 10-10 h44 l30 34 v32 z"
+      {/* Trailer outline */}
+      <rect
+        x={24}
+        y={58}
+        width={320}
+        height={94}
+        rx={8}
         fill="none"
         stroke="var(--border-strong)"
         strokeWidth={2}
+      />
+
+      {/* Fifth wheel neck */}
+      <path
+        d="M344 100 Q356 100 358 110 L360 152 L344 152 Z"
+        fill="var(--surface-2)"
+        stroke="var(--border-strong)"
+        strokeWidth={1.5}
+        opacity={0.35}
+      />
+
+      {/* Exhaust stacks */}
+      <rect x={360} y={30} width={5} height={62} rx={2.5} fill="var(--border-strong)" opacity={0.35} />
+      <rect x={370} y={24} width={5} height={68} rx={2.5} fill="var(--border-strong)" opacity={0.35} />
+      <ellipse cx={362.5} cy={30} rx={5} ry={3} fill="var(--border-strong)" opacity={0.3} />
+      <ellipse cx={372.5} cy={24} rx={5} ry={3} fill="var(--border-strong)" opacity={0.3} />
+
+      {/* Cab body — severity fill is on the body itself so it is not painted over */}
+      <path
+        d={CAB_PATH}
+        fill={cabSev ? severityFill[cabSev] : "var(--surface-2)"}
+        stroke={cabSev ? severityColor[cabSev] : "var(--border-strong)"}
+        strokeWidth={cabSev ? 2.5 : 2}
         strokeLinejoin="round"
       />
-      {/* windshield */}
-      <path d="M452 92 l24 28 h-24 z" fill="var(--surface-2)" stroke="var(--border)" strokeWidth={1.4} />
-      {/* exhaust stacks */}
-      <line x1={392} y1={58} x2={392} y2={86} stroke="var(--border-strong)" strokeWidth={3} strokeLinecap="round" />
-      <line x1={400} y1={54} x2={400} y2={86} stroke="var(--border-strong)" strokeWidth={3} strokeLinecap="round" />
 
-      {/* wheels */}
-      {[88, 132, 250, 294, 456, 498].map((cx) => (
+      {/* Windshield */}
+      <path
+        d="M498 68 L522 88 L528 130 L506 130 Z"
+        fill="var(--surface)"
+        stroke="var(--border)"
+        strokeWidth={1.2}
+        opacity={0.65}
+      />
+
+      {/* Hood crease */}
+      <path
+        d="M375 90 Q420 80 498 82"
+        fill="none"
+        stroke="var(--border-strong)"
+        strokeWidth={1}
+        opacity={0.15}
+      />
+
+      {/* Door outline */}
+      <path
+        d="M355 90 L390 90 L390 148 L355 148"
+        fill="none"
+        stroke="var(--border-strong)"
+        strokeWidth={1}
+        opacity={0.15}
+      />
+
+      {/* Door handle */}
+      <rect x={386} y={118} width={10} height={4} rx={2} fill="var(--border-strong)" opacity={0.2} />
+
+      {/* Side mirror */}
+      <line
+        x1={395}
+        y1={94}
+        x2={416}
+        y2={88}
+        stroke="var(--border-strong)"
+        strokeWidth={2}
+        strokeLinecap="round"
+        opacity={0.4}
+      />
+      <rect
+        x={416}
+        y={82}
+        width={14}
+        height={10}
+        rx={3}
+        fill="var(--surface-2)"
+        stroke="var(--border-strong)"
+        strokeWidth={1.5}
+        opacity={0.6}
+      />
+
+      {/* Headlight */}
+      <rect
+        x={514}
+        y={118}
+        width={12}
+        height={8}
+        rx={2}
+        fill="var(--med-bg)"
+        stroke="var(--med)"
+        strokeWidth={1}
+        opacity={0.7}
+      />
+
+      {/* Fuel tank */}
+      <rect
+        x={356}
+        y={126}
+        width={20}
+        height={26}
+        rx={4}
+        fill="var(--surface-2)"
+        stroke="var(--border-strong)"
+        strokeWidth={1.2}
+        opacity={0.4}
+      />
+
+      {/* Wheels */}
+      {[88, 132, 250, 294, 408, 452].map((cx) => (
         <g key={cx}>
           <circle cx={cx} cy={156} r={13} fill="var(--surface)" stroke="var(--border-strong)" strokeWidth={2.5} />
           <circle cx={cx} cy={156} r={4} fill="var(--border-strong)" />
         </g>
       ))}
 
-      {/* severity markers per zone */}
-      {zoneBoxes.map(({ zone, cx }) => {
-        const sev = zoneSeverity(findings, zone);
+      {/* Severity markers — one per silhouette region */}
+      {silhouetteZones.map(({ zone, cx, cy }) => {
+        const sev = silhouetteSeverity(findings, zone);
         if (!sev) return null;
         return (
-          <g key={`m-${zone}`}>
-            <circle cx={cx} cy={105} r={13} fill={severityColor[sev]} />
-            <circle cx={cx} cy={105} r={17} fill="none" stroke={severityColor[sev]} strokeWidth={1.5} opacity={0.35} />
-            <text x={cx} y={110} textAnchor="middle" fontSize={15} fontWeight={800} fill="white">
+          <g key={`m-${zone}`} aria-label={`${zone} ${sev}`}>
+            <circle cx={cx} cy={cy} r={17} fill={severityColor[sev]} opacity={0.15} />
+            <circle cx={cx} cy={cy} r={13} fill={severityColor[sev]} />
+            <circle
+              cx={cx}
+              cy={cy}
+              r={17}
+              fill="none"
+              stroke={severityColor[sev]}
+              strokeWidth={1.5}
+              opacity={0.35}
+            />
+            <text x={cx} y={cy + 5} textAnchor="middle" fontSize={15} fontWeight={800} fill="white">
               !
             </text>
           </g>

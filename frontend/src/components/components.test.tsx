@@ -134,7 +134,7 @@ describe("inspection components", () => {
       severity: "critical" as const,
       firstDetectedInspectionsAgo: 2,
     };
-    const { rerender } = render(
+    const { rerender, container } = render(
       <DamageMap inspection={inspection({ findings: [finding, previous], media: [] })} />
     );
 
@@ -142,6 +142,7 @@ describe("inspection components", () => {
     expect(screen.getByText(/New — first detected/)).toBeInTheDocument();
     expect(screen.getByText(/2 inspections ago/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /export pdf/i })).toBeDisabled();
+    expect(container.querySelector('[aria-label="cab medium"]')).toBeInTheDocument();
 
     rerender(
       <DamageMap

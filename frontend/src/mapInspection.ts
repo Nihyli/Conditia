@@ -15,6 +15,10 @@ import type {
   Inspection,
 } from "./types";
 
+const ZONE_ALIASES: Record<string, DamageZone> = {
+  rear: "trailer_rear",
+};
+
 const VALID_ZONES = new Set<string>([
   "front",
   "cab",
@@ -23,6 +27,7 @@ const VALID_ZONES = new Set<string>([
   "trailer_rear",
   "passenger_side",
   "driver_side",
+  ...Object.keys(ZONE_ALIASES),
 ]);
 
 const VALID_FINDING_TYPES = new Set<Finding["type"]>([
@@ -50,7 +55,9 @@ const VALID_STATUSES = new Set<Inspection["status"]>([
 ]);
 
 function normalizeZone(zone: string | null): DamageZone {
-  if (zone && VALID_ZONES.has(zone)) return zone as DamageZone;
+  if (!zone) return "unknown";
+  if (zone in ZONE_ALIASES) return ZONE_ALIASES[zone];
+  if (VALID_ZONES.has(zone)) return zone as DamageZone;
   return "unknown";
 }
 
@@ -90,7 +97,6 @@ function mapMedia(m: ApiMedia) {
     id: m.id,
     mediaType: m.media_type,
     captureAngle: m.capture_angle,
-    storagePath: m.storage_path,
     capturedAt: m.captured_at,
   };
 }

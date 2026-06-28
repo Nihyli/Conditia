@@ -39,11 +39,26 @@ function Stop-AllConditiaPython {
 }
 
 function Test-VenvHealthy {
-    param([string]$PythonExe)
+    param(
+        [string]$PythonExe,
+        [switch]$Verbose
+    )
     if (-not (Test-Path $PythonExe)) { return $false }
-    $code = "import alembic, fastapi, pydantic; from pydantic_core import validate_core_schema"
-    & $PythonExe -c $code 2>&1 | Out-Null
-    return $LASTEXITCODE -eq 0
+    $code = @'
+import alembic
+import fastapi
+import pydantic
+import sqlalchemy
+'@
+    $output = & $PythonExe -c $code 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        if ($Verbose) {
+            Write-Host "Venv health check failed for $PythonExe"
+            if ($output) { Write-Host $output }
+        }
+        return $false
+    }
+    return $true
 }
 
 function Get-ActiveVenv {
@@ -82,6 +97,9 @@ function Remove-VenvDir {
 function Install-Requirements {
     param([string]$PythonExe)
     & $PythonExe -m pip install --upgrade pip
+    if ($LASTEXITCODE -ne 0) {
+        throw "pip upgrade failed"
+    }
     for ($i = 1; $i -le 3; $i++) {
         Write-Host "pip install attempt $i/3..."
         & $PythonExe -m pip install -r requirements.txt
@@ -117,7 +135,13 @@ if ($null -eq $active) {
     $py = Join-Path $PSScriptRoot "$targetName\Scripts\python.exe"
     Install-Requirements -PythonExe $py
     $active = Get-ActiveVenv
-    if ($null -eq $active) { throw "Venv created but health check failed" }
+    if ($null -eq $active) {
+        Write-Host ""
+        Write-Host "Venv created but health check failed. Diagnostics:"
+        & $py -m pip check
+        Test-VenvHealthy -PythonExe $py -Verbose | Out-Null
+        throw "Fix the errors above, then run: .\.venv2\Scripts\python.exe -m pip install -r requirements.txt"
+    }
 }
 
 Write-Host ""
@@ -129,9 +153,9 @@ Write-Host "Running database migrations (alembic upgrade head)..."
 python -m alembic upgrade head
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
-    Write-Host "Alembic failed — Supabase likely has OLD tables from a prior Dev setup."
+    Write-Host "Alembic failed - Supabase likely has OLD tables from a prior Dev setup."
     Write-Host "1. Open Supabase dashboard -> SQL Editor"
-    Write-Host "2. Run: backend\scripts\reset_supabase_dev.sql"
+    Write-Host '2. Run: backend\scripts\reset_supabase_dev.sql'
     Write-Host "3. Then: python -m alembic upgrade head"
     exit 1
 }

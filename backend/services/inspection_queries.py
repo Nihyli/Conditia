@@ -24,7 +24,9 @@ async def build_inspection_summaries(
     trucks = {truck.id: truck for truck in truck_result.scalars().all()}
 
     finding_result = await db.execute(
-        select(Finding).where(Finding.inspection_id.in_(inspection_ids))
+        select(Finding)
+        .where(Finding.inspection_id.in_(inspection_ids))
+        .order_by(Finding.id.asc())
     )
     findings_by_inspection: dict[str, list[Finding]] = defaultdict(list)
     for finding in finding_result.scalars().all():

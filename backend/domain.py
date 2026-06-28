@@ -61,3 +61,9 @@ class Severity(str, Enum):
     HIGH = "high"
     CRITICAL = "critical"
     CLEAR = "clear"
+
+
+class FleetRole(str, Enum):
+    VIEWER = "viewer"
+    INSPECTOR = "inspector"
+    ADMIN = "admin"

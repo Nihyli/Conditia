@@ -61,11 +61,13 @@ class InspectionIngestionService:
         *,
         truck_id: str,
         source: IngestibleCaptureSource,
+        created_by: str | None = None,
     ) -> Inspection:
         inspection = Inspection(
             truck_id=truck_id,
             capture_source=source.value,
             status=InspectionStatus.UPLOADING.value,
+            created_by=created_by,
         )
         db.add(inspection)
         await db.commit()

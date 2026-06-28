@@ -17,7 +17,7 @@ from adapters.base import CaptureMetadata
 from config import settings
 from database import get_db
 from dependencies import get_inspection_ingestion_service
-from domain import CaptureAngle, IngestibleCaptureSource
+from domain import CaptureAngle, FleetRole, IngestibleCaptureSource
 from models.db_models import Finding, Inspection, InspectionMedia, Truck
 from models.schemas import (
     FindingOut,
@@ -27,7 +27,7 @@ from models.schemas import (
     MediaOut,
     UploadResult,
 )
-from security import Principal, require_api_access
+from security import Principal, require_api_access, require_roles
 from services.analysis_jobs import run_analysis_job
 from services.inspection_ingestion import (
     InspectionConflict,
@@ -53,7 +53,7 @@ async def _get_authorized_inspection(
 async def create_inspection(
     payload: InspectionCreate,
     db: AsyncSession = Depends(get_db),
-    principal: Principal = Depends(require_api_access),
+    principal: Principal = Depends(require_roles(FleetRole.INSPECTOR, FleetRole.ADMIN)),
     ingestion: InspectionIngestionService = Depends(
         get_inspection_ingestion_service
     ),
@@ -69,6 +69,7 @@ async def create_inspection(
         db,
         truck_id=truck_id,
         source=payload.capture_source,
+        created_by=principal.user_id,
     )
 
 
@@ -140,7 +141,7 @@ async def upload_media(
     gps_lat: float | None = Form(None),
     gps_lng: float | None = Form(None),
     db: AsyncSession = Depends(get_db),
-    principal: Principal = Depends(require_api_access),
+    principal: Principal = Depends(require_roles(FleetRole.INSPECTOR, FleetRole.ADMIN)),
     ingestion: InspectionIngestionService = Depends(
         get_inspection_ingestion_service
     ),
@@ -190,7 +191,7 @@ async def finalize_inspection(
     inspection_id: UUID,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
-    principal: Principal = Depends(require_api_access),
+    principal: Principal = Depends(require_roles(FleetRole.INSPECTOR, FleetRole.ADMIN)),
     ingestion: InspectionIngestionService = Depends(
         get_inspection_ingestion_service
     ),

@@ -1,10 +1,12 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import { AppLayout } from "./components/AppLayout";
 import { CapturePage } from "./pages/CapturePage";
 import { FindingsPage } from "./pages/FindingsPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { InspectionDetailPage } from "./pages/InspectionDetailPage";
 import { InspectionsPage } from "./pages/InspectionsPage";
+import { LoginPage } from "./pages/LoginPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { ReportDetailPage } from "./pages/ReportDetailPage";
 import { ReportsPage } from "./pages/ReportsPage";
@@ -13,7 +15,17 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { TruckDetailPage } from "./pages/TruckDetailPage";
 import { TrucksPage } from "./pages/TrucksPage";
 
-export function App() {
+function AppRoutes() {
+  const { status, needsSignIn } = useAuth();
+
+  if (status === "loading") {
+    return <div className="app-loading">Loading…</div>;
+  }
+
+  if (needsSignIn) {
+    return <LoginPage />;
+  }
+
   return (
     <Routes>
       <Route element={<AppLayout />}>
@@ -33,5 +45,13 @@ export function App() {
       <Route path="/capture/:truckId" element={<CapturePage />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
+  );
+}
+
+export function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+    </AuthProvider>
   );
 }

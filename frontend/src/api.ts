@@ -77,6 +77,53 @@ export interface TruckCreatePayload {
   license_plate?: string;
 }
 
+export interface ApiInspectionRecord {
+  id: string;
+  truck_id: string;
+  started_at: string;
+  completed_at: string | null;
+  status: string;
+  capture_source: string;
+}
+
+export interface ApiReport {
+  id: string;
+  inspection_id: string;
+  generated_at: string;
+  summary: string | null;
+  total_findings: number;
+  critical_findings: number;
+  pdf_path: string | null;
+  raw_json: {
+    inspection_id: string;
+    total_findings: number;
+    critical_findings: number;
+    requires_human_review?: boolean;
+    findings: Array<{
+      id: string;
+      title: string | null;
+      type: string;
+      severity: string;
+      confidence: number;
+      status: string;
+      zone: string | null;
+      location: string | null;
+      first_seen_inspection_id: string | null;
+    }>;
+  } | null;
+}
+
+export type FindingStatusFilter =
+  | "open"
+  | "acknowledged"
+  | "resolved"
+  | "false_positive";
+
+export interface FindingUpdatePayload {
+  status: FindingStatusFilter;
+  resolution_notes?: string;
+}
+
 const REQUEST_TIMEOUT_MS = 15_000;
 
 async function fetchWithTimeout(
@@ -126,12 +173,73 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+function buildQuery(params: Record<string, string | undefined>): string {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value) search.set(key, value);
+  }
+  const query = search.toString();
+  return query ? `?${query}` : "";
+}
+
 export function getTrucks(): Promise<ApiTruck[]> {
   return requestJson<ApiTruck[]>("/trucks");
 }
 
+export function getTruck(truckId: string): Promise<ApiTruck> {
+  return requestJson<ApiTruck>(`/trucks/${encodeURIComponent(truckId)}`);
+}
+
+export function getTruckInspections(
+  truckId: string
+): Promise<ApiInspectionRecord[]> {
+  return requestJson<ApiInspectionRecord[]>(
+    `/trucks/${encodeURIComponent(truckId)}/inspections`
+  );
+}
+
 export function getInspections(): Promise<ApiInspectionSummary[]> {
   return requestJson<ApiInspectionSummary[]>("/inspections");
+}
+
+export function getInspection(
+  inspectionId: string
+): Promise<ApiInspectionSummary> {
+  return requestJson<ApiInspectionSummary>(
+    `/inspections/${encodeURIComponent(inspectionId)}`
+  );
+}
+
+export function getFindings(params?: {
+  severity?: string;
+  status?: FindingStatusFilter;
+}): Promise<ApiFinding[]> {
+  const query = buildQuery({
+    severity: params?.severity,
+    status: params?.status,
+  });
+  return requestJson<ApiFinding[]>(`/findings${query}`);
+}
+
+export function updateFinding(
+  findingId: string,
+  payload: FindingUpdatePayload
+): Promise<ApiFinding> {
+  return requestJson<ApiFinding>(`/findings/${encodeURIComponent(findingId)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function getReports(): Promise<ApiReport[]> {
+  return requestJson<ApiReport[]>("/reports");
+}
+
+export function getReport(inspectionId: string): Promise<ApiReport> {
+  return requestJson<ApiReport>(
+    `/reports/${encodeURIComponent(inspectionId)}`
+  );
 }
 
 export function getInspectionMedia(

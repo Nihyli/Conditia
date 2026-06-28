@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ApiInspectionSummary } from "./api";
-import { mapInspectionSummary } from "./mapInspection";
+import { mapFindingDetail, mapInspectionSummary } from "./mapInspection";
 
 function inspection(
   overrides: Partial<ApiInspectionSummary> = {}
@@ -65,5 +65,15 @@ describe("mapInspectionSummary", () => {
     expect(
       mapInspectionSummary(inspection({ status: "review_required" })).status
     ).toBe("review_required");
+  });
+
+  it("maps finding detail metadata", () => {
+    const row = inspection().findings[0];
+    expect(mapFindingDetail(row)).toMatchObject({
+      inspectionId: "inspection-1",
+      status: "open",
+      firstSeenInspectionId: "inspection-1",
+      severity: "critical",
+    });
   });
 });

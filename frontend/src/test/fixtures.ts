@@ -41,6 +41,7 @@ export function inspection(overrides: Partial<Inspection> = {}): Inspection {
     status: "complete",
     findings: [finding],
     media: [photo, video],
+    startedAt: "2026-06-21T12:00:00Z",
     ...overrides,
   };
 }

@@ -3,11 +3,18 @@ import {
   createInspection,
   createTruck,
   finalizeInspection,
+  getFindings,
   getFleetStats,
+  getInspection,
   getInspectionMedia,
   getInspections,
+  getReport,
+  getReports,
+  getTruck,
+  getTruckInspections,
   getTrucks,
   mediaUrl,
+  updateFinding,
   uploadMedia,
 } from "./api";
 
@@ -27,22 +34,60 @@ describe("API client", () => {
     const fetchMock = vi.mocked(fetch);
     fetchMock
       .mockResolvedValueOnce(response([{ id: "truck-1" }]))
+      .mockResolvedValueOnce(response({ id: "truck-1" }))
       .mockResolvedValueOnce(response([{ id: "inspection-1" }]))
+      .mockResolvedValueOnce(response([{ id: "inspection-1" }]))
+      .mockResolvedValueOnce(response({ id: "inspection-1" }))
+      .mockResolvedValueOnce(response([{ id: "finding-1" }]))
+      .mockResolvedValueOnce(response([{ id: "report-1" }]))
+      .mockResolvedValueOnce(response({ id: "report-1" }))
       .mockResolvedValueOnce(response([{ id: "media-1" }]))
       .mockResolvedValueOnce(response({ active_trucks: 1 }));
 
     expect(await getTrucks()).toEqual([{ id: "truck-1" }]);
+    expect(await getTruck("truck-1")).toEqual({ id: "truck-1" });
+    expect(await getTruckInspections("truck-1")).toEqual([
+      { id: "inspection-1" },
+    ]);
     expect(await getInspections()).toEqual([{ id: "inspection-1" }]);
+    expect(await getInspection("inspection-1")).toEqual({ id: "inspection-1" });
+    expect(await getFindings({ severity: "medium", status: "open" })).toEqual([
+      { id: "finding-1" },
+    ]);
+    expect(await getReports()).toEqual([{ id: "report-1" }]);
+    expect(await getReport("inspection-1")).toEqual({ id: "report-1" });
     expect(await getInspectionMedia("inspection-1")).toEqual([
       { id: "media-1" },
     ]);
     expect(await getFleetStats()).toEqual({ active_trucks: 1 });
     expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
       "/api/trucks",
+      "/api/trucks/truck-1",
+      "/api/trucks/truck-1/inspections",
       "/api/inspections",
+      "/api/inspections/inspection-1",
+      "/api/findings?severity=medium&status=open",
+      "/api/reports",
+      "/api/reports/inspection-1",
       "/api/inspections/inspection-1/media",
       "/api/fleet/stats",
     ]);
+  });
+
+  it("patches finding status updates", async () => {
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValueOnce(
+      response({ id: "finding-1", status: "resolved" })
+    );
+
+    await updateFinding("finding-1", {
+      status: "resolved",
+      resolution_notes: "Repaired",
+    });
+
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/findings/finding-1");
+    expect(fetchMock.mock.calls[0][1]?.method).toBe("PATCH");
+    expect(fetchMock.mock.calls[0][1]?.body).toContain("resolved");
   });
 
   it("sends create/finalize payloads and returns safe API errors", async () => {

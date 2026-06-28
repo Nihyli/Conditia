@@ -1,9 +1,13 @@
+import { NavLink } from "react-router-dom";
+import { ROUTES } from "../nav";
 import { navIconMap, type NavIconName } from "./icons";
 
 interface NavItem {
   id: string;
   label: string;
   icon: NavIconName;
+  to: string;
+  end?: boolean;
   badge?: number;
 }
 
@@ -16,22 +20,22 @@ const baseGroups: NavGroup[] = [
   {
     label: "Monitor",
     items: [
-      { id: "overview", label: "Fleet overview", icon: "overview" },
-      { id: "trucks", label: "Trucks", icon: "truck" },
-      { id: "inspections", label: "Inspections", icon: "clipboard" },
-      { id: "findings", label: "Findings", icon: "alert" },
+      { id: "overview", label: "Fleet overview", icon: "overview", to: ROUTES.overview, end: true },
+      { id: "trucks", label: "Trucks", icon: "truck", to: ROUTES.trucks },
+      { id: "inspections", label: "Inspections", icon: "clipboard", to: ROUTES.inspections },
+      { id: "findings", label: "Findings", icon: "alert", to: ROUTES.findings },
     ],
   },
   {
     label: "Reports",
     items: [
-      { id: "reports", label: "Reports", icon: "report" },
-      { id: "history", label: "History", icon: "history" },
+      { id: "reports", label: "Reports", icon: "report", to: ROUTES.reports },
+      { id: "history", label: "History", icon: "history", to: ROUTES.history },
     ],
   },
   {
     label: "Integrations",
-    items: [{ id: "samsara", label: "Samsara", icon: "plug" }],
+    items: [{ id: "samsara", label: "Samsara", icon: "plug", to: ROUTES.samsara }],
   },
 ];
 
@@ -46,15 +50,11 @@ function buildGroups(trucksBadge?: number): NavGroup[] {
   }));
 }
 
-export function Sidebar({
-  active,
-  onSelect,
-  trucksBadge,
-}: {
-  active: string;
-  onSelect: (id: string) => void;
-  trucksBadge?: number;
-}) {
+function navClassName({ isActive }: { isActive: boolean }) {
+  return `nav__item${isActive ? " is-active" : ""}`;
+}
+
+export function Sidebar({ trucksBadge }: { trucksBadge?: number }) {
   const groups = buildGroups(trucksBadge);
   return (
     <aside className="sidebar">
@@ -79,18 +79,18 @@ export function Sidebar({
             {group.items.map((item) => {
               const Icon = navIconMap[item.icon];
               return (
-                <button
+                <NavLink
                   key={item.id}
-                  className={`nav__item${active === item.id ? " is-active" : ""}`}
-                  onClick={() => onSelect(item.id)}
-                  aria-current={active === item.id ? "page" : undefined}
+                  to={item.to}
+                  end={item.end}
+                  className={navClassName}
                 >
                   <Icon size={18} />
                   <span>{item.label}</span>
                   {item.badge != null && item.badge > 0 ? (
                     <span className="nav__badge">{item.badge}</span>
                   ) : null}
-                </button>
+                </NavLink>
               );
             })}
           </div>
@@ -98,16 +98,13 @@ export function Sidebar({
       </nav>
 
       <div className="sidebar__foot">
-        <button
-          className={`nav__item${active === "settings" ? " is-active" : ""}`}
-          onClick={() => onSelect("settings")}
-        >
+        <NavLink to={ROUTES.settings} className={navClassName}>
           {(() => {
             const Icon = navIconMap.settings;
             return <Icon size={18} />;
           })()}
           <span>Settings</span>
-        </button>
+        </NavLink>
       </div>
     </aside>
   );

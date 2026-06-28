@@ -10,6 +10,7 @@ import type {
   CaptureSource,
   DamageZone,
   Finding,
+  FindingDetail,
   FleetStat,
   Inspection,
 } from "./types";
@@ -94,6 +95,15 @@ function mapMedia(m: ApiMedia) {
   };
 }
 
+export function mapFindingDetail(f: ApiFinding): FindingDetail {
+  return {
+    ...mapFinding(f),
+    inspectionId: f.inspection_id,
+    status: f.status,
+    firstSeenInspectionId: f.first_seen_inspection_id,
+  };
+}
+
 export function mapInspectionSummary(row: ApiInspectionSummary): Inspection {
   const { capturedAtLabel, relativeLabel } = formatCapturedAt(row.started_at);
   return {
@@ -108,6 +118,7 @@ export function mapInspectionSummary(row: ApiInspectionSummary): Inspection {
     status: parseStatus(row.status),
     findings: row.findings.map(mapFinding),
     media: (row.media ?? []).map(mapMedia),
+    startedAt: row.started_at,
   };
 }
 

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { apiInspection } from "../test/fixtures";
-import { DashboardPage } from "./DashboardPage";
+import { OverviewPage } from "./OverviewPage";
 import { getFleetStats, getInspections } from "../api";
 
 vi.mock("../api", () => ({
@@ -15,15 +15,15 @@ vi.mock("../api", () => ({
 const mockedInspections = vi.mocked(getInspections);
 const mockedStats = vi.mocked(getFleetStats);
 
-function renderDashboard() {
+function renderOverview() {
   return render(
     <MemoryRouter>
-      <DashboardPage />
+      <OverviewPage />
     </MemoryRouter>
   );
 }
 
-describe("DashboardPage", () => {
+describe("OverviewPage", () => {
   beforeEach(() => {
     mockedInspections.mockReset();
     mockedStats.mockReset();
@@ -38,7 +38,7 @@ describe("DashboardPage", () => {
       inspections_complete_today: 1,
       open_findings: 1,
     });
-    renderDashboard();
+    renderOverview();
 
     expect(screen.getByText("Loading fleet data…")).toBeInTheDocument();
     expect(await screen.findByText("TRK-001 — Damage map")).toBeInTheDocument();
@@ -51,7 +51,7 @@ describe("DashboardPage", () => {
       apiInspection({ status: "processing", finding_count: 2 }),
     ]);
     mockedStats.mockRejectedValue(new Error("not supported"));
-    renderDashboard();
+    renderOverview();
 
     expect(await screen.findByText("Awaiting analysis")).toBeInTheDocument();
     expect(screen.getByText("Processing in background")).toBeInTheDocument();
@@ -66,7 +66,7 @@ describe("DashboardPage", () => {
       inspections_complete_today: 0,
       open_findings: 0,
     });
-    renderDashboard();
+    renderOverview();
 
     expect(await screen.findByText("No inspections yet")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /start first inspection/i })).toHaveAttribute(
@@ -87,7 +87,7 @@ describe("DashboardPage", () => {
       inspections_complete_today: 0,
       open_findings: 0,
     });
-    renderDashboard();
+    renderOverview();
 
     expect(await screen.findByText("Could not load fleet data.")).toBeInTheDocument();
     expect(screen.getByText("offline")).toBeInTheDocument();

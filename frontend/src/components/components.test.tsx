@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { DamageMap } from "./DamageMap";
 import { InspectionMediaViewer } from "./InspectionMediaViewer";
 import { RecentInspections } from "./RecentInspections";
@@ -28,19 +28,26 @@ describe("shared dashboard components", () => {
     expect(screen.getByText("Stable")).toBeInTheDocument();
   });
 
-  it("navigates the sidebar and displays an active-truck badge", async () => {
-    const user = userEvent.setup();
-    const onSelect = vi.fn();
-    render(<Sidebar active="overview" onSelect={onSelect} trucksBadge={3} />);
+  it("navigates the sidebar with router links and displays an active-truck badge", () => {
+    render(
+      <MemoryRouter>
+        <Sidebar trucksBadge={3} />
+      </MemoryRouter>
+    );
 
-    expect(screen.getByRole("button", { name: /fleet overview/i })).toHaveAttribute(
-      "aria-current",
-      "page"
+    expect(screen.getByRole("link", { name: /fleet overview/i })).toHaveAttribute(
+      "href",
+      "/"
     );
     expect(screen.getByText("3")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: /trucks/i }));
-    await user.click(screen.getByRole("button", { name: /settings/i }));
-    expect(onSelect.mock.calls).toEqual([["trucks"], ["settings"]]);
+    expect(screen.getByRole("link", { name: /trucks/i })).toHaveAttribute(
+      "href",
+      "/trucks"
+    );
+    expect(screen.getByRole("link", { name: /settings/i })).toHaveAttribute(
+      "href",
+      "/settings"
+    );
   });
 
   it("renders the topbar route and disables unfinished controls", () => {

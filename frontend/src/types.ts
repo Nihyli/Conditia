@@ -16,6 +16,7 @@ export interface Inspection {
     | "failed";
   findings: Finding[];
   media: InspectionMedia[];
+  startedAt: string;
 }
 
 export interface InspectionMedia {
@@ -49,6 +50,18 @@ export interface Finding {
   confidence: number;
   zone: DamageZone;
   firstDetectedInspectionsAgo: number;
+}
+
+export type FindingStatus =
+  | "open"
+  | "acknowledged"
+  | "resolved"
+  | "false_positive";
+
+export interface FindingDetail extends Finding {
+  inspectionId: string;
+  status: FindingStatus;
+  firstSeenInspectionId: string | null;
 }
 
 export interface FleetStat {

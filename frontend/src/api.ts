@@ -27,6 +27,7 @@ export interface ApiFinding {
   status: "open" | "acknowledged" | "resolved" | "false_positive";
   zone: string | null;
   location: string | null;
+  resolution_notes: string | null;
   first_seen_inspection_id: string | null;
   first_detected_inspections_ago: number;
 }
@@ -59,6 +60,20 @@ export interface ApiInspection {
   truck_id: string;
   status: string;
   capture_source: string;
+}
+
+export interface ApiFleetMember {
+  fleet_id: string;
+  user_id: string;
+  role: "viewer" | "inspector" | "admin";
+}
+
+export interface ApiInspectionCoverage {
+  required: string[];
+  optional: string[];
+  present: string[];
+  missing_required: string[];
+  complete: boolean;
 }
 
 export interface ApiMedia {
@@ -263,6 +278,58 @@ export function mediaUrl(mediaId: string): string {
 
 export function getFleetStats(): Promise<ApiFleetStats> {
   return requestJson<ApiFleetStats>("/fleet/stats");
+}
+
+export function getFleetMembers(): Promise<ApiFleetMember[]> {
+  return requestJson<ApiFleetMember[]>("/fleet/members");
+}
+
+export function addFleetMember(payload: {
+  user_id: string;
+  role: ApiFleetMember["role"];
+}): Promise<ApiFleetMember> {
+  return requestJson<ApiFleetMember>("/fleet/members", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updateFleetMember(
+  userId: string,
+  role: ApiFleetMember["role"]
+): Promise<ApiFleetMember> {
+  return requestJson<ApiFleetMember>(
+    `/fleet/members/${encodeURIComponent(userId)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
+    }
+  );
+}
+
+export async function removeFleetMember(userId: string): Promise<void> {
+  const response = await fetchWithTimeout(
+    `${API_BASE}/fleet/members/${encodeURIComponent(userId)}`,
+    {
+      method: "DELETE",
+      headers: authHeaders(),
+    }
+  );
+  if (!response.ok) {
+    throw new Error(
+      await errorMessage(response, `DELETE /fleet/members/${userId} failed`)
+    );
+  }
+}
+
+export function getInspectionCoverage(
+  inspectionId: string
+): Promise<ApiInspectionCoverage> {
+  return requestJson<ApiInspectionCoverage>(
+    `/inspections/${encodeURIComponent(inspectionId)}/coverage`
+  );
 }
 
 export function createTruck(payload: TruckCreatePayload): Promise<ApiTruck> {

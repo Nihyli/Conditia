@@ -126,6 +126,27 @@ describe("inspection components", () => {
     expect(onSelect).toHaveBeenCalledWith("two");
   });
 
+  it("filters inspections by status", async () => {
+    const user = userEvent.setup();
+    render(
+      <RecentInspections
+        inspections={[
+          inspection({ id: "one", status: "complete" }),
+          inspection({ id: "two", truckLabel: "TRK-002", status: "processing" }),
+        ]}
+        activeId="one"
+        onSelect={vi.fn()}
+      />
+    );
+
+    expect(screen.getByRole("button", { name: /TRK-001/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /TRK-002/i })).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText(/filter by status/i), "processing");
+    expect(screen.queryByRole("button", { name: /TRK-001/i })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /TRK-002/i })).toBeInTheDocument();
+  });
+
   it("sorts findings, explains change history, and shows review state", () => {
     const previous = {
       ...finding,
@@ -134,20 +155,27 @@ describe("inspection components", () => {
       severity: "critical" as const,
       firstDetectedInspectionsAgo: 2,
     };
-    const { rerender, container } = render(
-      <DamageMap inspection={inspection({ findings: [finding, previous], media: [] })} />
+    const { rerender } = render(
+      <MemoryRouter>
+        <DamageMap inspection={inspection({ findings: [finding, previous], media: [] })} />
+      </MemoryRouter>
     );
 
     expect(screen.getByText("Old crack")).toBeInTheDocument();
+    for (const link of screen.getAllByRole("link", { name: /view inspection/i })) {
+      expect(link).toHaveAttribute("href", "/inspections/inspection-1");
+    }
     expect(screen.getByText(/New — first detected/)).toBeInTheDocument();
     expect(screen.getByText(/2 inspections ago/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /export pdf/i })).toBeDisabled();
-    expect(container.querySelector('[aria-label="cab medium"]')).toBeInTheDocument();
+    expect(screen.getByLabelText("cab critical")).toBeInTheDocument();
 
     rerender(
-      <DamageMap
-        inspection={inspection({ findings: [], media: [], status: "review_required" })}
-      />
+      <MemoryRouter>
+        <DamageMap
+          inspection={inspection({ findings: [], media: [], status: "review_required" })}
+        />
+      </MemoryRouter>
     );
     expect(screen.getByText("Manual review required")).toBeInTheDocument();
     expect(screen.getByText(/not a clear result/i)).toBeInTheDocument();

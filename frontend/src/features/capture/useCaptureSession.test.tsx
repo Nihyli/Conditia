@@ -75,16 +75,47 @@ describe("useCaptureSession", () => {
     await act(() => result.current.start("truck-1"));
     await act(() => result.current.capture(new Blob(["clip"]), "webm"));
     expect(result.current.status.front.error).toBe("upload failed");
+
+    vi.mocked(api.uploadMedia).mockResolvedValue(undefined);
+    for (let i = 0; i < 4; i += 1) {
+      await act(() => result.current.capture(new Blob(["clip"]), "webm"));
+    }
     await act(() => result.current.finalize());
     expect(result.current.error).toBe("submit failed");
     expect(result.current.phase).toBe("capture");
   });
 
-  it("skips angles without touching the API", () => {
+  it("blocks skipping required angles", () => {
     const { result } = renderHook(() => useCaptureSession(api));
     act(() => result.current.skip());
-    expect(result.current.angle.key).toBe("driver_side");
+    expect(result.current.angle.key).toBe("front");
+    expect(result.current.error).toMatch(/required/i);
     expect(api.uploadMedia).not.toHaveBeenCalled();
+  });
+
+  it("allows skipping optional angles without touching the API", async () => {
+    vi.mocked(api.createInspection).mockResolvedValue(inspection);
+    const { result } = renderHook(() => useCaptureSession(api));
+
+    await act(() => result.current.start("truck-1"));
+    for (let i = 0; i < 4; i += 1) {
+      await act(() => result.current.capture(new Blob(["clip"]), "webm"));
+    }
+    expect(result.current.angle.key).toBe("top");
+
+    act(() => result.current.skip());
+    expect(result.current.angle.key).toBe("undercarriage");
+    expect(api.uploadMedia).toHaveBeenCalledTimes(4);
+  });
+
+  it("blocks finalize when required angles are missing", async () => {
+    vi.mocked(api.createInspection).mockResolvedValue(inspection);
+    const { result } = renderHook(() => useCaptureSession(api));
+
+    await act(() => result.current.start("truck-1"));
+    await act(() => result.current.finalize());
+    expect(result.current.error).toMatch(/Missing required angles/i);
+    expect(api.finalizeInspection).not.toHaveBeenCalled();
   });
 
   it("ignores start when truck id is missing", async () => {
@@ -111,8 +142,9 @@ describe("useCaptureSession", () => {
     expect(result.current.phase).toBe("done");
   });
 
-  it("finalizes when skipping the last angle", async () => {
+  it("finalizes when skipping optional angles after required coverage", async () => {
     vi.mocked(api.createInspection).mockResolvedValue(inspection);
+    vi.mocked(api.uploadMedia).mockResolvedValue(undefined);
     vi.mocked(api.finalizeInspection).mockResolvedValue({
       ...inspection,
       status: "submitted",
@@ -120,9 +152,10 @@ describe("useCaptureSession", () => {
     const { result } = renderHook(() => useCaptureSession(api));
 
     await act(() => result.current.start("truck-1"));
-    for (let i = 0; i < CAPTURE_ANGLES.length - 1; i += 1) {
-      act(() => result.current.skip());
+    for (let i = 0; i < 4; i += 1) {
+      await act(() => result.current.capture(new Blob(["clip"]), "webm"));
     }
+    act(() => result.current.skip());
     await act(async () => {
       result.current.skip();
     });
@@ -146,6 +179,10 @@ describe("useCaptureSession", () => {
     await act(() => result.current.capture(new Blob(["clip"]), "webm"));
     expect(result.current.status.front.error).toBe("Upload failed");
 
+    vi.mocked(api.uploadMedia).mockResolvedValue(undefined);
+    for (let i = 0; i < 4; i += 1) {
+      await act(() => result.current.capture(new Blob(["clip"]), "webm"));
+    }
     await act(() => result.current.finalize());
     expect(result.current.error).toBe("Could not finalize inspection");
   });

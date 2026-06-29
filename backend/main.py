@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from database import get_db, init_db, is_postgres, run_migrations
-from routers import auth, findings, fleet, inspections, media, reports, trucks
+from routers import auth, findings, fleet, inspections, media, memberships, reports, trucks
 from security import require_api_access
 from services.analysis_jobs import resume_incomplete_analysis_jobs
 
@@ -62,7 +62,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_list,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "Authorization", "X-API-Key", "X-Request-ID"],
     expose_headers=["X-Request-ID"],
 )
@@ -127,6 +127,7 @@ async def unhandled_exception(request: Request, exc: Exception):
 api_router = APIRouter(dependencies=[Depends(require_api_access)])
 api_router.include_router(auth.router)
 api_router.include_router(fleet.router)
+api_router.include_router(memberships.router)
 api_router.include_router(trucks.router)
 api_router.include_router(inspections.router)
 api_router.include_router(media.router)

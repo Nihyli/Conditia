@@ -164,12 +164,14 @@ finding routes add `require_roles`):
 | GET | `/ready` | Readiness — executes `SELECT 1` against the DB |
 | GET | `/auth/me` | Current principal: auth mode, user id, fleet id, role |
 | GET | `/fleet/stats` | KPI counts (trucks, today/pending/complete, open findings) |
+| GET/POST/PATCH/DELETE | `/fleet/members` | List fleet members; add/update/remove (`admin` for mutations) |
 | POST | `/trucks` / GET `/trucks` | Register / list assets (fleet-scoped, bounded) |
 | GET | `/trucks/{id}` / `/trucks/{id}/inspections` | Asset detail / its inspections |
 | POST | `/inspections` | Create an `uploading` inspection |
 | POST | `/inspections/{id}/upload` | Upload verified media |
-| POST | `/inspections/{id}/finalize` | Submit once for analysis |
+| POST | `/inspections/{id}/finalize` | Submit once for analysis (requires 4 required angles) |
 | GET | `/inspections` / `/inspections/{id}` | Inspection summaries / detail (findings + media) |
+| GET | `/inspections/{id}/coverage` | Required vs present capture angles |
 | GET | `/inspections/{id}/findings` / `/inspections/{id}/media` | Per-inspection findings / media |
 | GET | `/inspection-media/{id}/content` | Authorized media delivery (local file or signed redirect) |
 | GET | `/findings` | List findings (filter by severity/status, fleet-scoped) |
@@ -335,8 +337,10 @@ broken, runs migrations, and starts the server.
 **Working:** guided mobile capture, structured upload, the explicit inspection
 lifecycle, durable analysis jobs with crash recovery, change-over-time
 detection, the fleet console (overview KPIs and damage map, trucks, inspections,
-findings with role-gated resolution, reports, history, settings/account), JWT
-user identity with fleet-membership roles, and structured report generation. The
+findings with role-gated resolution, reports, history, settings/account with
+fleet member management), JWT user identity with fleet-membership roles,
+required-angle capture coverage (front/rear/sides), and structured report
+generation. The
 backend runs on Supabase PostgreSQL via the asyncpg/pooler normalization
 described above.
 
@@ -352,9 +356,9 @@ described above.
    become an isolated, retrying worker for production.
 4. **Production object-storage adapter** — finalize the Supabase Storage path
    and authorized media delivery.
-5. **Reports/PDF export, telematics, and org management** — PDF export, the
-   Samsara integration, and in-console user/role/API-key management are not yet
-   built.
+5. **Reports/PDF export and telematics** — PDF export and the Samsara
+   integration are not yet built. In-console API-key management is also
+   outstanding; fleet member roles can be managed from Settings by admins.
 
 The guiding rule for closing these gaps is unchanged: **prefer truthful,
 review-gated behavior over fabricated certainty**, because Conditia's value is

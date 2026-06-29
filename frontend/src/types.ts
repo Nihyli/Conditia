@@ -61,6 +61,7 @@ export interface FindingDetail extends Finding {
   inspectionId: string;
   status: FindingStatus;
   firstSeenInspectionId: string | null;
+  resolutionNotes: string | null;
 }
 
 export interface FleetStat {

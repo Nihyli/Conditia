@@ -1,4 +1,6 @@
 import type { DamageZone, Finding, Inspection, Severity } from "../types";
+import { Link } from "react-router-dom";
+import { ROUTES } from "../nav";
 import {
   severityClass,
   severityColor,
@@ -306,7 +308,13 @@ export function DamageMap({ inspection }: { inspection: Inspection }) {
                 <div className="finding__desc">
                   {f.location} ·{" "}
                   <span className="mono">{Math.round(f.confidence * 100)}%</span>{" "}
-                  confidence
+                  confidence ·{" "}
+                  <Link
+                    to={ROUTES.inspectionDetail(inspection.id)}
+                    className="text-link"
+                  >
+                    View inspection
+                  </Link>
                 </div>
                 <ChangeLine ago={f.firstDetectedInspectionsAgo} />
               </div>

@@ -35,6 +35,7 @@ describe("FindingsPage", () => {
           location: "Front bumper",
           first_seen_inspection_id: "inspection-1",
           first_detected_inspections_ago: 0,
+          resolution_notes: null,
         },
       ])
       .mockResolvedValueOnce([
@@ -50,6 +51,7 @@ describe("FindingsPage", () => {
           location: "Front bumper",
           first_seen_inspection_id: "inspection-1",
           first_detected_inspections_ago: 0,
+          resolution_notes: "Panel replaced",
         },
       ]);
     mockedUpdateFinding.mockResolvedValue({
@@ -64,6 +66,7 @@ describe("FindingsPage", () => {
       location: "Front bumper",
       first_seen_inspection_id: "inspection-1",
       first_detected_inspections_ago: 0,
+      resolution_notes: "Panel replaced",
     });
 
     render(
@@ -73,12 +76,46 @@ describe("FindingsPage", () => {
     );
 
     expect(await screen.findByText("Front bumper dent")).toBeInTheDocument();
+    await user.type(
+      screen.getByPlaceholderText(/resolution notes/i),
+      "Panel replaced"
+    );
     await user.click(screen.getByRole("button", { name: /resolve/i }));
     await waitFor(() =>
       expect(mockedUpdateFinding).toHaveBeenCalledWith("finding-1", {
         status: "resolved",
-        resolution_notes: undefined,
+        resolution_notes: "Panel replaced",
       })
     );
+    expect(await screen.findByText(/Resolution: Panel replaced/)).toBeInTheDocument();
+  });
+
+  it("shows stored resolution notes on closed findings", async () => {
+    mockedGetFindings.mockResolvedValue([
+      {
+        id: "finding-2",
+        inspection_id: "inspection-1",
+        title: "Old scratch",
+        finding_type: "scratch",
+        severity: "low",
+        confidence: 0.75,
+        status: "resolved",
+        zone: "driver_side",
+        location: "Door",
+        first_seen_inspection_id: "inspection-0",
+        first_detected_inspections_ago: 2,
+        resolution_notes: "Cosmetic only — documented",
+      },
+    ]);
+
+    render(
+      <MemoryRouter>
+        <FindingsPage />
+      </MemoryRouter>
+    );
+
+    expect(
+      await screen.findByText(/Resolution: Cosmetic only — documented/)
+    ).toBeInTheDocument();
   });
 });

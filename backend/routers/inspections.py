@@ -21,6 +21,7 @@ from domain import CaptureAngle, FleetRole, IngestibleCaptureSource
 from models.db_models import Finding, Inspection, InspectionMedia, Truck
 from models.schemas import (
     FindingOut,
+    InspectionCoverageOut,
     InspectionCreate,
     InspectionOut,
     InspectionSummary,
@@ -29,6 +30,11 @@ from models.schemas import (
 )
 from security import Principal, require_api_access, require_roles
 from services.analysis_jobs import run_analysis_job
+from services.coverage import (
+    OPTIONAL_CAPTURE_ANGLES,
+    REQUIRED_CAPTURE_ANGLES,
+    missing_required_angles,
+)
 from services.inspection_ingestion import (
     InspectionConflict,
     InspectionIngestionService,
@@ -97,6 +103,32 @@ async def get_inspection(
     if inspection is None:
         raise HTTPException(404, "Inspection not found")
     return (await build_inspection_summaries(db, [inspection]))[0]
+
+
+@router.get("/{inspection_id}/coverage", response_model=InspectionCoverageOut)
+async def inspection_coverage(
+    inspection_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    principal: Principal = Depends(require_api_access),
+):
+    if await _get_authorized_inspection(db, inspection_id, principal) is None:
+        raise HTTPException(404, "Inspection not found")
+    inspection_key = str(inspection_id)
+    result = await db.execute(
+        select(InspectionMedia.capture_angle).where(
+            InspectionMedia.inspection_id == inspection_key,
+            InspectionMedia.capture_angle.is_not(None),
+        )
+    )
+    present = sorted({row for row in result.scalars().all() if row})
+    missing = await missing_required_angles(db, inspection_key)
+    return InspectionCoverageOut(
+        required=[angle.value for angle in REQUIRED_CAPTURE_ANGLES],
+        optional=[angle.value for angle in OPTIONAL_CAPTURE_ANGLES],
+        present=present,
+        missing_required=missing,
+        complete=len(missing) == 0,
+    )
 
 
 @router.get("/{inspection_id}/findings", response_model=list[FindingOut])

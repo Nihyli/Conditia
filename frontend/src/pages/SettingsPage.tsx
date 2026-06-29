@@ -1,4 +1,5 @@
 import { useAuth } from "../auth/AuthProvider";
+import { FleetMembersPanel } from "../components/FleetMembersPanel";
 
 const AUTH_MODE_LABEL: Record<string, string> = {
   jwt: "User session (JWT)",
@@ -20,7 +21,7 @@ const ROLE_CAPABILITIES: { role: string; summary: string }[] = [
   {
     role: "admin",
     summary:
-      "Full fleet access, including service integrations and (planned) member management.",
+      "Full fleet access, including member management and service integrations.",
   },
 ];
 
@@ -99,20 +100,10 @@ export function SettingsPage() {
         </div>
       </section>
 
-      <section className="panel">
-        <div className="panel__head">
-          <h2 className="panel__title">Not available yet</h2>
-        </div>
-        <div className="empty">
-          <div className="empty__title">Organization management is coming</div>
-          <p className="muted">
-            Inviting users, editing fleet membership and roles, switching
-            organizations, and managing service API keys aren&apos;t in the
-            console yet. Memberships are provisioned directly in the backend
-            (<code>fleet_memberships</code>).
-          </p>
-        </div>
-      </section>
+      <FleetMembersPanel
+        canManage={role === "admin"}
+        currentUserId={session?.user_id ?? null}
+      />
     </>
   );
 }

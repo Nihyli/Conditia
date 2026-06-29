@@ -65,6 +65,20 @@ async def create_inspection(client: AsyncClient) -> str:
     return response.json()["id"]
 
 
+async def upload_angle(client: AsyncClient, inspection_id: str, angle: str) -> None:
+    response = await client.post(
+        f"/inspections/{inspection_id}/upload",
+        data={"capture_angle": angle, "capture_source": "mobile"},
+        files={"files": (f"{angle}.png", PNG, "image/png")},
+    )
+    assert response.status_code == 200, response.text
+
+
+async def upload_required_angles(client: AsyncClient, inspection_id: str) -> None:
+    for angle in ("front", "rear", "driver_side", "passenger_side"):
+        await upload_angle(client, inspection_id, angle)
+
+
 @pytest.mark.asyncio
 async def test_request_validation_and_bounded_lists(client: AsyncClient) -> None:
     readiness = await client.get("/ready")
@@ -157,12 +171,16 @@ async def test_finalize_requires_media_and_runs_only_once(client: AsyncClient) -
     empty = await client.post(f"/inspections/{inspection_id}/finalize")
     assert empty.status_code == 409
 
-    uploaded = await client.post(
-        f"/inspections/{inspection_id}/upload",
-        data={"capture_angle": "front", "capture_source": "mobile"},
-        files={"files": ("front.png", PNG, "image/png")},
-    )
-    assert uploaded.status_code == 200
+    await upload_angle(client, inspection_id, "front")
+    incomplete = await client.post(f"/inspections/{inspection_id}/finalize")
+    assert incomplete.status_code == 409
+    assert "Missing required capture angles" in incomplete.json()["detail"]
+
+    await upload_required_angles(client, inspection_id)
+
+    coverage = await client.get(f"/inspections/{inspection_id}/coverage")
+    assert coverage.status_code == 200
+    assert coverage.json()["complete"] is True
 
     finalized = await client.post(f"/inspections/{inspection_id}/finalize")
     assert finalized.status_code == 200, finalized.text

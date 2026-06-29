@@ -11,33 +11,49 @@ export const CAPTURE_ANGLES: AngleSpec[] = [
     key: "front",
     label: "Front",
     hint: "Stand at the front. Film the grille, bumper, and windshield.",
+    required: true,
   },
   {
     key: "driver_side",
     label: "Driver side",
     hint: "Walk the driver side, keeping the full length in frame.",
+    required: true,
   },
   {
     key: "rear",
     label: "Rear",
     hint: "Film the rear doors, lights, and bumper.",
+    required: true,
   },
   {
     key: "passenger_side",
     label: "Passenger side",
     hint: "Walk the passenger side end to end.",
+    required: true,
   },
   {
     key: "top",
     label: "Top",
     hint: "Hold the phone high. Capture the roof and trailer top.",
+    required: false,
   },
   {
     key: "undercarriage",
     label: "Undercarriage",
     hint: "Low angle near the rear axle. Mind your footing.",
+    required: false,
   },
 ];
+
+export const REQUIRED_CAPTURE_ANGLES = CAPTURE_ANGLES.filter((a) => a.required).map(
+  (a) => a.key
+);
+
+export function missingRequiredAngles(
+  status: Record<string, AngleState>
+): string[] {
+  return REQUIRED_CAPTURE_ANGLES.filter((key) => status[key]?.state !== "done");
+}
 
 export type AngleState = {
   state: "pending" | "uploading" | "done" | "error";
@@ -99,6 +115,13 @@ export function useCaptureSession(api: CaptureSessionApi = defaultApi) {
 
   async function finalize() {
     if (!inspectionId || finalizing) return;
+    const missing = missingRequiredAngles(status);
+    if (missing.length > 0) {
+      setError(
+        `Missing required angles: ${missing.join(", ")}. Capture each required angle before submitting.`
+      );
+      return;
+    }
     setFinalizing(true);
     setError(null);
     try {
@@ -153,6 +176,11 @@ export function useCaptureSession(api: CaptureSessionApi = defaultApi) {
   }
 
   function skip() {
+    if (angle.required) {
+      setError(`${angle.label} is required and cannot be skipped.`);
+      return;
+    }
+    setError(null);
     if (angleIndex < CAPTURE_ANGLES.length - 1) {
       setAngleIndex((current) => current + 1);
     } else {
@@ -169,6 +197,7 @@ export function useCaptureSession(api: CaptureSessionApi = defaultApi) {
     starting,
     finalizing,
     error,
+    missingRequired: missingRequiredAngles(status),
     start,
     capture,
     finalize,

@@ -10,6 +10,7 @@ from domain import (
     CaptureSource,
     FindingStatus,
     FindingType,
+    FleetRole,
     IngestibleCaptureSource,
     InspectionStatus,
     Severity,
@@ -170,3 +171,32 @@ class AuthSessionOut(BaseModel):
     user_id: str | None = None
     fleet_id: str | None = None
     role: str | None = None
+
+
+class FleetMemberOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    fleet_id: str
+    user_id: str
+    role: str
+
+
+class FleetMemberCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: UUID
+    role: FleetRole
+
+
+class FleetMemberUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: FleetRole
+
+
+class InspectionCoverageOut(BaseModel):
+    required: list[str]
+    optional: list[str]
+    present: list[str]
+    missing_required: list[str]
+    complete: bool

@@ -200,6 +200,12 @@ export function FindingsPage() {
                     </button>
                   </div>
                 ) : null}
+                {(f.status === "resolved" || f.status === "false_positive") &&
+                f.resolutionNotes ? (
+                  <p className="finding__resolution muted">
+                    Resolution: {f.resolutionNotes}
+                  </p>
+                ) : null}
               </div>
             </article>
           ))}

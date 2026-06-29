@@ -253,9 +253,10 @@ export function CapturePage() {
   }
 
   // ---------- CAPTURE ----------
-  const { angle, angleIndex, status, finalizing } = captureSession;
+  const { angle, angleIndex, status, finalizing, missingRequired } = captureSession;
   const current = status[angle.key];
   const uploading = current?.state === "uploading";
+  const canSkip = !angle.required;
 
   return (
     <div className="capture">
@@ -328,16 +329,27 @@ export function CapturePage() {
         ) : current?.state === "error" ? (
           <div className="upload-bar__label">
             <span className="error-note">{current.error}</span>
-            <button className="text-btn" onClick={captureSession.skip}>
-              Skip
-            </button>
+            {canSkip ? (
+              <button className="text-btn" onClick={captureSession.skip}>
+                Skip
+              </button>
+            ) : null}
           </div>
-        ) : (
+        ) : canSkip ? (
           <div className="upload-bar__label">
             <span className="muted">Film this angle, or</span>
             <button className="text-btn" onClick={captureSession.skip}>
               Skip angle
             </button>
+          </div>
+        ) : (
+          <div className="upload-bar__label">
+            <span className="muted">
+              Required angle — capture before continuing
+              {missingRequired.length > 0
+                ? ` (${missingRequired.length} required remaining)`
+                : ""}
+            </span>
           </div>
         )}
       </div>

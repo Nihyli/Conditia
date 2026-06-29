@@ -107,6 +107,7 @@ export function mapFindingDetail(f: ApiFinding): FindingDetail {
     inspectionId: f.inspection_id,
     status: f.status,
     firstSeenInspectionId: f.first_seen_inspection_id,
+    resolutionNotes: f.resolution_notes,
   };
 }
 

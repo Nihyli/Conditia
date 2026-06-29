@@ -1,6 +1,6 @@
+import { useMemo, useState } from "react";
 import type { Inspection, Severity } from "../types";
 import { severityColor, severityRank } from "../severity";
-import { IconFilter } from "./icons";
 
 function worstSeverity(inspection: Inspection): Severity {
   if (inspection.findings.length === 0) return "clear";
@@ -8,6 +8,16 @@ function worstSeverity(inspection: Inspection): Severity {
     return severityRank[f.severity] > severityRank[worst] ? f.severity : worst;
   }, "clear");
 }
+
+const STATUS_FILTER_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "All statuses" },
+  { value: "complete", label: "Complete" },
+  { value: "processing", label: "Processing" },
+  { value: "submitted", label: "Submitted" },
+  { value: "uploading", label: "Uploading" },
+  { value: "review_required", label: "Review required" },
+  { value: "failed", label: "Failed" },
+];
 
 export function RecentInspections({
   inspections,
@@ -18,19 +28,42 @@ export function RecentInspections({
   activeId: string;
   onSelect: (id: string) => void;
 }) {
+  const [statusFilter, setStatusFilter] = useState("");
+
+  const filtered = useMemo(() => {
+    if (!statusFilter) return inspections;
+    return inspections.filter((insp) => insp.status === statusFilter);
+  }, [inspections, statusFilter]);
+
   return (
     <section className="panel">
       <div className="panel__head">
         <h2 className="panel__title">Recent inspections</h2>
         <div className="panel__spacer" />
-        <button className="ghost-btn" disabled title="Filtering is not available yet">
-          <IconFilter />
-          Filter
-        </button>
+        <label className="form-field form-field--inline">
+          <select
+            className="select"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            aria-label="Filter by status"
+          >
+            {STATUS_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value || "all"} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
+      {filtered.length === 0 ? (
+        <div className="empty">
+          <div className="empty__title">No inspections match</div>
+          <p className="muted">Try a different status filter.</p>
+        </div>
+      ) : (
       <div className="insp-list">
-        {inspections.map((insp) => {
+        {filtered.map((insp) => {
           const sev = worstSeverity(insp);
           return (
             <button
@@ -58,6 +91,7 @@ export function RecentInspections({
           );
         })}
       </div>
+      )}
     </section>
   );
 }

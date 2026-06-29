@@ -20,6 +20,7 @@ from domain import (
     InspectionStatus,
 )
 from models.db_models import AnalysisJob, Inspection, InspectionMedia
+from services.coverage import missing_required_angles
 
 logger = logging.getLogger(__name__)
 
@@ -136,6 +137,13 @@ class InspectionIngestionService:
         if not media_count:
             raise InspectionConflict(
                 "Upload at least one media file before finalizing"
+            )
+
+        missing = await missing_required_angles(db, inspection.id)
+        if missing:
+            raise InspectionConflict(
+                "Missing required capture angles: "
+                + ", ".join(missing)
             )
 
         transition = await db.execute(

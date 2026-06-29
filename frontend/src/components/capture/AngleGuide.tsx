@@ -7,6 +7,7 @@ export interface AngleSpec {
   key: string;
   label: string;
   hint: string;
+  required?: boolean;
 }
 
 function pickMime(): string {

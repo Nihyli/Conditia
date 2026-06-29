@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "../auth/AuthProvider";
 import { getFindings, updateFinding } from "../api";
 import { PageAlert } from "../components/PageAlert";
 import { mapFindingDetail } from "../mapInspection";
@@ -27,6 +28,8 @@ function changeLabel(ago: number) {
 }
 
 export function FindingsPage() {
+  const { session } = useAuth();
+  const canManage = session?.role === "inspector" || session?.role === "admin";
   const [findings, setFindings] = useState<FindingDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -165,7 +168,8 @@ export function FindingsPage() {
                   <span className="finding__change-dot" />
                   {changeLabel(f.firstDetectedInspectionsAgo)}
                 </span>
-                {f.status === "open" || f.status === "acknowledged" ? (
+                {canManage &&
+                (f.status === "open" || f.status === "acknowledged") ? (
                   <div className="finding__actions">
                     <input
                       className="finding__notes"

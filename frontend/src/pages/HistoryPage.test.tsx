@@ -45,6 +45,7 @@ describe("HistoryPage", () => {
             location: "Driver door",
             first_seen_inspection_id: "inspection-1",
             first_detected_inspections_ago: 0,
+            resolution_notes: null,
           },
           {
             id: "old-finding",
@@ -58,6 +59,7 @@ describe("HistoryPage", () => {
             location: "Front bumper",
             first_seen_inspection_id: "inspection-0",
             first_detected_inspections_ago: 2,
+            resolution_notes: null,
           },
         ],
         finding_count: 2,

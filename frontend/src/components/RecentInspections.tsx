@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Inspection, Severity } from "../types";
 import { severityColor, severityRank } from "../severity";
 
@@ -34,6 +34,15 @@ export function RecentInspections({
     if (!statusFilter) return inspections;
     return inspections.filter((insp) => insp.status === statusFilter);
   }, [inspections, statusFilter]);
+
+  // Keep the parent's active selection (which drives the damage map) inside the
+  // visible set so the highlighted row and the map can't point at different
+  // inspections after filtering.
+  useEffect(() => {
+    if (filtered.length > 0 && !filtered.some((i) => i.id === activeId)) {
+      onSelect(filtered[0].id);
+    }
+  }, [filtered, activeId, onSelect]);
 
   return (
     <section className="panel">

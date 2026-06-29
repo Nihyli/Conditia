@@ -294,12 +294,14 @@ export function CapturePage() {
         {captureSession.error ? (
           <div className="upload-bar__label">
             <span className="error-note">{captureSession.error}</span>
-            <button
-              className="text-btn"
-              onClick={() => void captureSession.finalize()}
-            >
-              Retry submit
-            </button>
+            {captureSession.missingRequired.length === 0 ? (
+              <button
+                className="text-btn"
+                onClick={() => void captureSession.finalize()}
+              >
+                Retry submit
+              </button>
+            ) : null}
           </div>
         ) : uploading || finalizing ? (
           <>

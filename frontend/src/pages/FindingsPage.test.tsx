@@ -10,13 +10,39 @@ vi.mock("../api", () => ({
   updateFinding: vi.fn(),
 }));
 
+const { authState } = vi.hoisted(() => ({
+  authState: { role: "admin" as string | null },
+}));
+
+vi.mock("../auth/AuthProvider", () => ({
+  useAuth: () => ({
+    session: { auth_mode: "jwt", user_id: "u", fleet_id: "f", role: authState.role },
+  }),
+}));
+
 const mockedGetFindings = vi.mocked(getFindings);
 const mockedUpdateFinding = vi.mocked(updateFinding);
+
+const OPEN_FINDING = {
+  id: "finding-1",
+  inspection_id: "inspection-1",
+  title: "Front bumper dent",
+  finding_type: "dent",
+  severity: "medium",
+  confidence: 0.87,
+  status: "open" as const,
+  zone: "front",
+  location: "Front bumper",
+  first_seen_inspection_id: "inspection-1",
+  first_detected_inspections_ago: 0,
+  resolution_notes: null,
+};
 
 describe("FindingsPage", () => {
   beforeEach(() => {
     mockedGetFindings.mockReset();
     mockedUpdateFinding.mockReset();
+    authState.role = "admin";
   });
 
   it("lists findings and resolves one", async () => {
@@ -117,5 +143,20 @@ describe("FindingsPage", () => {
     expect(
       await screen.findByText(/Resolution: Cosmetic only — documented/)
     ).toBeInTheDocument();
+  });
+
+  it("hides mutation controls from viewers", async () => {
+    authState.role = "viewer";
+    mockedGetFindings.mockResolvedValue([OPEN_FINDING]);
+
+    render(
+      <MemoryRouter>
+        <FindingsPage />
+      </MemoryRouter>
+    );
+
+    expect(await screen.findByText("Front bumper dent")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /resolve/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /false positive/i })).toBeNull();
   });
 });

@@ -215,7 +215,7 @@ describe("CapturePage", () => {
     expect(await screen.findByText("duplicate VIN")).toBeInTheDocument();
   });
 
-  it("allows skipping an angle after an upload error", async () => {
+  it("recovers from an upload error by retrying the capture", async () => {
     const user = userEvent.setup();
     mockedGetTrucks.mockResolvedValue([
       {
@@ -242,7 +242,9 @@ describe("CapturePage", () => {
     await user.click(await screen.findByRole("button", { name: "Capture Front" }));
 
     expect(await screen.findByText("upload failed")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "Skip" }));
+    // Front is a required angle, so it can't be skipped — re-filming it must
+    // succeed and advance to the next angle.
+    await user.click(screen.getByRole("button", { name: "Capture Front" }));
     expect(await screen.findByText("Driver side")).toBeInTheDocument();
   });
 });

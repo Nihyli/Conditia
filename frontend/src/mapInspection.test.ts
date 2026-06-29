@@ -29,6 +29,7 @@ function inspection(
         location: null,
         first_seen_inspection_id: "inspection-1",
         first_detected_inspections_ago: 0,
+        resolution_notes: null,
       },
     ],
     media: [],

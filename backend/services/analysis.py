@@ -117,49 +117,43 @@ async def _set_terminal_status(inspection_id: str, status: InspectionStatus) -> 
         await db.commit()
 
 
-async def _analyze_frames(
-    db: AsyncSession,
-    inspection: Inspection,
-    media: InspectionMedia,
-    frames: list[Path],
+async def _detect_all(
+    media_inputs: list[tuple[str, str]],
+    storage: MaterializedStorage,
     detector: Detector,
-) -> bool:
+) -> tuple[list[tuple[str, list]], bool]:
+    """Run detection (storage I/O, frame extraction, model calls) with no open DB
+    transaction, returning (media_id, detections) pairs to persist afterward."""
+    results: list[tuple[str, list]] = []
     requires_review = False
-    for frame_path in frames:
-        batch = await detector(frame_path)
-        requires_review = requires_review or batch.requires_human_review
-        for detection in batch.detections:
-            first_seen = await find_first_occurrence(
-                db=db,
-                truck_id=inspection.truck_id,
-                finding_type=detection.finding_type,
-                zone=detection.zone,
-                current_inspection_id=inspection.id,
-            )
-            db.add(
-                Finding(
-                    inspection_id=inspection.id,
-                    media_id=media.id,
-                    title=detection.description or detection.finding_type.title(),
-                    finding_type=detection.finding_type,
-                    severity=detection.severity,
-                    confidence=detection.confidence,
-                    zone=detection.zone,
-                    location=detection.location,
-                    bounding_box=detection.bounding_box,
-                    description=detection.description,
-                    first_seen_inspection_id=first_seen,
+    for media_id, storage_path in media_inputs:
+        detections: list = []
+        async with storage.materialize(storage_path) as local_path:
+            with tempfile.TemporaryDirectory(prefix="conditia-frames-") as frame_dir:
+                frames = await anyio.to_thread.run_sync(
+                    extract_frames, local_path, Path(frame_dir)
                 )
-            )
-    return requires_review
+                for frame_path in frames:
+                    batch = await detector(frame_path)
+                    requires_review = requires_review or batch.requires_human_review
+                    detections.extend(batch.detections)
+        results.append((media_id, detections))
+    return results, requires_review
 
 
 async def analyze_inspection(
     inspection_id: str,
     dependencies: AnalysisDependencies | None = None,
 ) -> None:
-    """Claim one submitted inspection and analyze it exactly once per submission."""
+    """Claim one submitted inspection and analyze it exactly once per submission.
+
+    Detection runs between two short transactions instead of inside one long one:
+    a claim txn flips the status and snapshots immutable inputs, detection happens
+    with no transaction held, then a write txn atomically replaces findings,
+    report, and status.
+    """
     dependencies = dependencies or default_analysis_dependencies()
+
     async with SessionLocal() as db:
         claim = await db.execute(
             update(Inspection)
@@ -172,73 +166,78 @@ async def analyze_inspection(
         await db.commit()
         if claim.rowcount != 1:
             return
-
         inspection = await db.get(Inspection, inspection_id)
         if inspection is None:
             return
-
-        try:
-            media_result = await db.execute(
-                select(InspectionMedia).where(
-                    InspectionMedia.inspection_id == inspection_id
-                )
+        truck_id = inspection.truck_id
+        media_result = await db.execute(
+            select(InspectionMedia.id, InspectionMedia.storage_path).where(
+                InspectionMedia.inspection_id == inspection_id
             )
-            media_items = list(media_result.scalars().all())
-            if not media_items:
-                raise FrameExtractionUnavailable("Inspection has no media")
+        )
+        media_inputs = [(row.id, row.storage_path) for row in media_result.all()]
 
-            await db.execute(delete(Finding).where(Finding.inspection_id == inspection_id))
-            requires_review = False
+    try:
+        if not media_inputs:
+            raise FrameExtractionUnavailable("Inspection has no media")
 
-            for media in media_items:
-                async with dependencies.storage.materialize(
-                    media.storage_path
-                ) as local_path:
-                    with tempfile.TemporaryDirectory(
-                        prefix="conditia-frames-"
-                    ) as frame_directory:
-                        frames = await anyio.to_thread.run_sync(
-                            extract_frames,
-                            local_path,
-                            Path(frame_directory),
+        detected, requires_review = await _detect_all(
+            media_inputs, dependencies.storage, dependencies.detector
+        )
+
+        async with SessionLocal() as db:
+            await db.execute(
+                delete(Finding).where(Finding.inspection_id == inspection_id)
+            )
+            for media_id, detections in detected:
+                for detection in detections:
+                    first_seen = await find_first_occurrence(
+                        db=db,
+                        truck_id=truck_id,
+                        finding_type=detection.finding_type,
+                        zone=detection.zone,
+                        current_inspection_id=inspection_id,
+                    )
+                    db.add(
+                        Finding(
+                            inspection_id=inspection_id,
+                            media_id=media_id,
+                            title=detection.description
+                            or detection.finding_type.title(),
+                            finding_type=detection.finding_type,
+                            severity=detection.severity,
+                            confidence=detection.confidence,
+                            zone=detection.zone,
+                            location=detection.location,
+                            bounding_box=detection.bounding_box,
+                            description=detection.description,
+                            first_seen_inspection_id=first_seen,
                         )
-                        requires_review = (
-                            await _analyze_frames(
-                                db,
-                                inspection,
-                                media,
-                                frames,
-                                dependencies.detector,
-                            )
-                            or requires_review
-                        )
-
+                    )
             await db.flush()
             await dependencies.report_builder(
                 db,
                 inspection_id,
                 requires_human_review=requires_review,
             )
-            inspection.completed_at = datetime.now(timezone.utc)
-            inspection.status = (
-                InspectionStatus.REVIEW_REQUIRED.value
-                if requires_review
-                else InspectionStatus.COMPLETE.value
-            )
+            inspection = await db.get(Inspection, inspection_id)
+            if inspection is not None:
+                inspection.completed_at = datetime.now(timezone.utc)
+                inspection.status = (
+                    InspectionStatus.REVIEW_REQUIRED.value
+                    if requires_review
+                    else InspectionStatus.COMPLETE.value
+                )
             await db.commit()
-        except (DetectorUnavailable, DetectionFailed, FrameExtractionUnavailable):
-            await db.rollback()
-            logger.warning(
-                "Inspection analysis requires review",
-                extra={"inspection_id": inspection_id},
-            )
-            await _set_terminal_status(
-                inspection_id, InspectionStatus.REVIEW_REQUIRED
-            )
-        except Exception:
-            await db.rollback()
-            logger.exception(
-                "Inspection analysis failed",
-                extra={"inspection_id": inspection_id},
-            )
-            await _set_terminal_status(inspection_id, InspectionStatus.FAILED)
+    except (DetectorUnavailable, DetectionFailed, FrameExtractionUnavailable):
+        logger.warning(
+            "Inspection analysis requires review",
+            extra={"inspection_id": inspection_id},
+        )
+        await _set_terminal_status(inspection_id, InspectionStatus.REVIEW_REQUIRED)
+    except Exception:
+        logger.exception(
+            "Inspection analysis failed",
+            extra={"inspection_id": inspection_id},
+        )
+        await _set_terminal_status(inspection_id, InspectionStatus.FAILED)

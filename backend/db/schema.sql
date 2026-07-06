@@ -1,7 +1,10 @@
--- Conditia — production schema for Supabase / PostgreSQL.
--- Local dev uses SQLAlchemy create_all on SQLite; this file is the canonical
--- production DDL. Hardware-agnostic by design: capture_source is the only place
--- the system records what collected the footage.
+-- Conditia — reference schema for Supabase / PostgreSQL.
+-- SOURCE OF TRUTH: Alembic migrations (backend/migrations/versions). Tables come
+-- from 0001-0005 and RLS policies from 0006. This file is a human-readable
+-- snapshot; do not provision production from it. Re-running it is safe (idempotent)
+-- but Alembic is what deployments must use.
+-- Hardware-agnostic by design: capture_source is the only place the system
+-- records what collected the footage.
 
 -- Fleet accounts
 CREATE TABLE IF NOT EXISTS fleets (

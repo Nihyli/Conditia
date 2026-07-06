@@ -55,22 +55,46 @@ def _decode_bearer_token(token: str) -> str:
     return subject
 
 
-async def _membership_for_user(
-    db: AsyncSession, user_id: str
-) -> FleetMembership | None:
+async def _select_membership(
+    db: AsyncSession, user_id: str, requested_fleet_id: str | None
+) -> FleetMembership:
+    """Resolve which fleet a user is acting as.
+
+    One membership: use it. Multiple: require an explicit ``X-Fleet-ID`` so the
+    tenant context is never picked arbitrarily.
+    """
     result = await db.execute(
         select(FleetMembership)
         .where(FleetMembership.user_id == user_id)
         .order_by(FleetMembership.fleet_id.asc())
-        .limit(1)
     )
-    return result.scalar_one_or_none()
+    memberships = list(result.scalars().all())
+    if not memberships:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No fleet access for this account",
+        )
+    if requested_fleet_id is not None:
+        for membership in memberships:
+            if membership.fleet_id == requested_fleet_id:
+                return membership
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No access to the requested fleet",
+        )
+    if len(memberships) > 1:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Multiple fleet memberships — set the X-Fleet-ID header",
+        )
+    return memberships[0]
 
 
 async def require_api_access(
     db: AsyncSession = Depends(get_db),
     authorization: str | None = Header(default=None),
     x_api_key: str | None = Header(default=None),
+    x_fleet_id: str | None = Header(default=None, alias="X-Fleet-ID"),
 ) -> Principal:
     if settings.auth_mode == "disabled":
         return Principal(user_id=None, fleet_id=None, role=FleetRole.ADMIN)
@@ -108,12 +132,7 @@ async def require_api_access(
         )
 
     user_id = _decode_bearer_token(token)
-    membership = await _membership_for_user(db, user_id)
-    if membership is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="No fleet access for this account",
-        )
+    membership = await _select_membership(db, user_id, x_fleet_id)
     try:
         role = FleetRole(membership.role)
     except ValueError:

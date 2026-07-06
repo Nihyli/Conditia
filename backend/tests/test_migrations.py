@@ -32,6 +32,16 @@ def test_legacy_sqlite_uuid_migration_preserves_relationships(tmp_path: Path) ->
                 id VARCHAR PRIMARY KEY,
                 inspection_id VARCHAR NOT NULL REFERENCES inspections(id)
             );
+            -- Present in any DB at revision 0002; later migrations alter it.
+            CREATE TABLE analysis_jobs (
+                id VARCHAR PRIMARY KEY,
+                inspection_id VARCHAR NOT NULL REFERENCES inspections(id),
+                status VARCHAR NOT NULL DEFAULT 'pending',
+                attempts INTEGER NOT NULL DEFAULT 0,
+                last_error VARCHAR,
+                created_at DATETIME,
+                updated_at DATETIME
+            );
             """
         )
         connection.execute("INSERT INTO fleets(id) VALUES (?)", (fleet_id,))
@@ -92,4 +102,4 @@ def test_legacy_sqlite_uuid_migration_preserves_relationships(tmp_path: Path) ->
     assert inspection_row == (inspection_id.replace("-", ""), truck_id.replace("-", ""))
     assert media_row == (media_id.replace("-", ""), inspection_id.replace("-", ""))
     assert violations == []
-    assert version == ("0005_fleet_memberships",)
+    assert version == ("0007_analysis_job_leases",)

@@ -164,6 +164,13 @@ class AnalysisJob(Base):
     status: Mapped[str] = mapped_column(String, default="pending")
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     last_error: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Lease: which process owns a running job and until when. Only expired (or
+    # unowned) running jobs may be reclaimed, so concurrent instances never
+    # double-run the same inspection.
+    lease_owner: Mapped[str | None] = mapped_column(String, nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        TZDateTime, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=_now)
     updated_at: Mapped[datetime] = mapped_column(
         TZDateTime, default=_now, onupdate=_now

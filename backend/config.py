@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     max_request_bytes: int = 151 * 1024 * 1024
     max_image_pixels: int = 50_000_000
 
+    # Per-client requests per minute. 0 disables the in-process limiter; real
+    # multi-instance protection still belongs at the gateway.
+    rate_limit_per_minute: int = 0
+
     seed_on_startup: bool = False
 
     supabase_url: str | None = None
@@ -83,6 +87,8 @@ class Settings(BaseSettings):
             raise ValueError("MAX_FILES_PER_UPLOAD must be between 1 and 20")
         if self.max_image_pixels < 1:
             raise ValueError("MAX_IMAGE_PIXELS must be positive")
+        if self.rate_limit_per_minute < 0:
+            raise ValueError("RATE_LIMIT_PER_MINUTE cannot be negative")
         return self
 
     @property

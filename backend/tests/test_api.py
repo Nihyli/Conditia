@@ -242,6 +242,38 @@ async def test_interrupted_analysis_job_is_reclaimed(client: AsyncClient) -> Non
 
 
 @pytest.mark.asyncio
+async def test_running_job_with_valid_lease_is_not_reclaimed(
+    client: AsyncClient,
+) -> None:
+    inspection_id = await create_inspection(client)
+
+    async with SessionLocal() as db:
+        inspection = await db.get(Inspection, inspection_id)
+        inspection.status = "processing"
+        job = AnalysisJob(
+            inspection_id=inspection_id,
+            status="running",
+            attempts=1,
+            lease_owner="another-live-instance",
+            lease_expires_at=datetime.now(timezone.utc) + timedelta(minutes=10),
+        )
+        db.add(job)
+        await db.commit()
+        job_id = job.id
+
+    await resume_incomplete_analysis_jobs()
+
+    async with SessionLocal() as db:
+        inspection = await db.get(Inspection, inspection_id)
+        job = await db.get(AnalysisJob, job_id)
+        # Untouched: another instance still holds a valid lease.
+        assert inspection.status == "processing"
+        assert job.status == "running"
+        assert job.attempts == 1
+        assert job.lease_owner == "another-live-instance"
+
+
+@pytest.mark.asyncio
 async def test_api_key_guard(client: AsyncClient) -> None:
     original_mode = settings.auth_mode
     original_key = settings.api_key

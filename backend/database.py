@@ -1,5 +1,7 @@
+import logging
 import ssl as ssl_lib
 from collections.abc import AsyncGenerator
+from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import event
@@ -12,9 +14,49 @@ from sqlalchemy.orm import DeclarativeBase
 
 from config import settings
 
+logger = logging.getLogger(__name__)
+
 
 class Base(DeclarativeBase):
     pass
+
+
+def _build_ssl_context(
+    *,
+    sslmode: str | None,
+    is_supabase: bool,
+) -> ssl_lib.SSLContext | None:
+    if sslmode not in ("require", "verify-ca", "verify-full") and not is_supabase:
+        return None
+
+    ca_path = settings.database_ssl_ca
+    if ca_path and Path(ca_path).is_file():
+        ctx = ssl_lib.create_default_context(cafile=ca_path)
+        ctx.check_hostname = sslmode == "verify-full"
+        return ctx
+
+    if sslmode in ("verify-ca", "verify-full"):
+        ctx = ssl_lib.create_default_context()
+        if sslmode != "verify-full":
+            ctx.check_hostname = False
+        return ctx
+
+    if settings.database_ssl_insecure:
+        ctx = ssl_lib.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl_lib.CERT_NONE
+        if settings.environment == "production":
+            logger.warning(
+                "Postgres TLS verification disabled via DATABASE_SSL_INSECURE"
+            )
+        return ctx
+
+    # Encrypted but unverified — matches libpq ``require`` and Supabase pooler
+    # defaults when no CA bundle is configured.
+    ctx = ssl_lib.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl_lib.CERT_NONE
+    return ctx
 
 
 def build_async_url(raw_url: str) -> tuple[str, dict]:
@@ -23,10 +65,7 @@ def build_async_url(raw_url: str) -> tuple[str, dict]:
     - Rewrites bare Postgres URLs (``postgres://`` / ``postgresql://``) to the
       asyncpg driver so Supabase connection strings work as pasted.
     - Strips the libpq-only ``sslmode`` query arg (asyncpg rejects it) and turns
-      it into an asyncpg ``ssl`` connect arg following libpq semantics:
-      ``require`` (and the Supabase default) encrypts without verifying the
-      chain, while ``verify-ca`` / ``verify-full`` verify it. TLS is enabled
-      automatically for ``*.supabase.co`` / ``*.supabase.com`` hosts.
+      it into an asyncpg ``ssl`` connect arg.
     - Disables asyncpg's statement cache, required when connecting through the
       Supabase transaction pooler (PgBouncer).
 
@@ -51,15 +90,9 @@ def build_async_url(raw_url: str) -> tuple[str, dict]:
 
     host = parts.hostname or ""
     is_supabase = host.endswith(("supabase.co", "supabase.com"))
-    if sslmode in ("require", "verify-ca", "verify-full") or is_supabase:
-        ctx = ssl_lib.create_default_context()
-        # Only verify-ca / verify-full check the certificate chain. The default
-        # (require) encrypts but skips verification — matching libpq and how
-        # Supabase pooler certs are issued (not in the system trust store).
-        if sslmode not in ("verify-ca", "verify-full"):
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl_lib.CERT_NONE
-        connect_args["ssl"] = ctx
+    ssl_context = _build_ssl_context(sslmode=sslmode, is_supabase=is_supabase)
+    if ssl_context is not None:
+        connect_args["ssl"] = ssl_context
 
     connect_args["statement_cache_size"] = 0
     return raw_url, connect_args

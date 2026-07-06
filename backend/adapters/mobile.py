@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import UploadFile
 
 from adapters.base import CaptureAdapter, CaptureMetadata, MediaWriter, StoredMedia
@@ -42,5 +44,11 @@ class MobileAdapter(CaptureAdapter):
             return stored
         except Exception:
             for item in stored:
-                await self._storage.delete(item.storage_path)
+                try:
+                    await self._storage.delete(item.storage_path)
+                except Exception:
+                    logging.getLogger(__name__).exception(
+                        "Could not clean up media after upload failure",
+                        extra={"storage_path": item.storage_path},
+                    )
             raise

@@ -68,13 +68,16 @@ class FleetMembership(Base):
 
 class Truck(Base):
     __tablename__ = "trucks"
-    __table_args__ = (CheckConstraint("year IS NULL OR year >= 1900", name="ck_truck_year"),)
+    __table_args__ = (
+        CheckConstraint("year IS NULL OR year >= 1900", name="ck_truck_year"),
+        UniqueConstraint("fleet_id", "vin", name="uq_truck_fleet_vin"),
+    )
 
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True, default=_uuid)
     fleet_id: Mapped[str | None] = mapped_column(
         ForeignKey("fleets.id", ondelete="RESTRICT")
     )
-    vin: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    vin: Mapped[str] = mapped_column(String, nullable=False)
     make: Mapped[str | None] = mapped_column(String)
     model: Mapped[str | None] = mapped_column(String)
     year: Mapped[int | None] = mapped_column(Integer)
@@ -208,12 +211,13 @@ class Finding(Base):
     title: Mapped[str | None] = mapped_column(String)
     # dent | scratch | crack | missing_component | rust | anomaly
     finding_type: Mapped[str] = mapped_column(String)
-    # critical | medium | low | clear  (also accepts 'high' -> mapped to critical)
+    # critical | medium | low | clear  (high is normalized to critical at write time)
     severity: Mapped[str] = mapped_column(String)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     status: Mapped[str] = mapped_column(String, default="open")
     resolved_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
     resolution_notes: Mapped[str | None] = mapped_column(String, nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String, nullable=True)
     # truck silhouette zone used by the dashboard damage map
     zone: Mapped[str | None] = mapped_column(String)
     location: Mapped[str | None] = mapped_column(String)

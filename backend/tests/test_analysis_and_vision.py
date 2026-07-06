@@ -103,7 +103,7 @@ async def test_google_detection_filters_labels_and_requires_review(
         "scratch",
         "missing_component",
     ]
-    assert batch.detections[0].severity == "high"
+    assert batch.detections[0].severity == "critical"
     assert batch.requires_human_review is True
     assert batch.detector == "google-label-detection-experimental"
 

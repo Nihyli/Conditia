@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import time
 from contextlib import asynccontextmanager, suppress
 from uuid import uuid4
 
@@ -12,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from database import get_db, init_db, is_postgres, run_migrations
+from rate_limit import is_rate_limited, rate_limit_key
 from routers import (
     auth,
     findings,
@@ -150,6 +150,10 @@ def _add_security_headers(response, request_id: str, *, csp: bool = True):
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Permissions-Policy"] = "camera=(self), geolocation=()"
     response.headers["X-Request-ID"] = request_id
+    if settings.environment == "production":
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=63072000; includeSubDomains"
+        )
     if csp:
         # This service only serves JSON; lock everything down. Skipped for the
         # Swagger/ReDoc pages (dev only) which load assets from a CDN.
@@ -157,23 +161,6 @@ def _add_security_headers(response, request_id: str, *, csp: bool = True):
             "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
         )
     return response
-
-
-# ponytail: per-process fixed-window counter, keyed by client IP. Real
-# multi-instance limiting belongs at the gateway / a shared store (Redis).
-_rate_window: dict[str, tuple[int, float]] = {}
-_rate_lock = asyncio.Lock()
-
-
-async def _is_rate_limited(key: str, limit: int) -> bool:
-    now = time.monotonic()
-    async with _rate_lock:
-        count, started = _rate_window.get(key, (0, now))
-        if now - started >= 60:
-            count, started = 0, now
-        count += 1
-        _rate_window[key] = (count, started)
-        return count > limit
 
 
 @app.middleware("http")
@@ -184,8 +171,19 @@ async def security_headers(request: Request, call_next):
 
     limit = settings.rate_limit_per_minute
     if limit > 0:
-        client = request.client.host if request.client else "unknown"
-        if await _is_rate_limited(client, limit):
+        key = rate_limit_key(request)
+        if key is None:
+            return _add_security_headers(
+                JSONResponse(
+                    status_code=400,
+                    content={"detail": "Could not determine client identity"},
+                ),
+                request_id,
+                csp=csp,
+            )
+        if await is_rate_limited(
+            key, limit, max_keys=settings.rate_limit_max_keys
+        ):
             return _add_security_headers(
                 JSONResponse(status_code=429, content={"detail": "Too many requests"}),
                 request_id,
@@ -244,6 +242,7 @@ api_router.include_router(memberships.router)
 api_router.include_router(trucks.router)
 api_router.include_router(inspections.router)
 api_router.include_router(media.router)
+app.include_router(media.public_router)
 api_router.include_router(findings.router)
 api_router.include_router(reports.router)
 app.include_router(api_router)
@@ -251,8 +250,14 @@ app.include_router(api_router)
 
 @app.get("/health", tags=["meta"])
 async def health():
+    return {"status": "ok"}
+
+
+@app.get("/meta", tags=["meta"])
+async def meta(principal=Depends(require_api_access)):
+    del principal
     return {
-        "status": "ok",
+        "name": "Conditia API",
         "version": APP_VERSION,
         "features": ["inspection_media", "explicit_finalize", "fleet_stats"],
         "database": settings.database_url.split("://", 1)[0],

@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from adapters.base import CaptureMetadata, StoredMedia
 from adapters.registry import CaptureAdapterRegistry
+from config import settings
 from domain import (
     AnalysisJobStatus,
     CaptureAngle,
@@ -87,6 +88,16 @@ class InspectionIngestionService:
     ) -> IngestionResult:
         if inspection.status != InspectionStatus.UPLOADING.value:
             raise InspectionConflict("Inspection is not accepting uploads")
+
+        media_count = await db.scalar(
+            select(func.count())
+            .select_from(InspectionMedia)
+            .where(InspectionMedia.inspection_id == inspection.id)
+        )
+        if (media_count or 0) + len(files) > settings.max_media_per_inspection:
+            raise InspectionConflict(
+                f"At most {settings.max_media_per_inspection} media files are allowed per inspection"
+            )
 
         adapter = self._adapters.get(source)
         stored_items = await adapter.receive_media(

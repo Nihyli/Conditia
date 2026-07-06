@@ -13,8 +13,9 @@ import anyio
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import settings
 from database import SessionLocal
-from domain import InspectionStatus
+from domain import FindingStatus, InspectionStatus
 from models.db_models import Finding, Inspection, InspectionMedia, Report
 from services import report_generator
 from services.change_detection import find_first_occurrence
@@ -70,9 +71,11 @@ def extract_frames(
     media_path: Path,
     output_directory: Path,
     interval_seconds: int = 2,
+    max_frames: int | None = None,
 ) -> list[Path]:
     if media_path.suffix.lower() not in VIDEO_SUFFIXES:
         return [media_path]
+    frame_limit = max_frames or settings.max_frames_per_video
     try:
         import cv2  # type: ignore
     except ImportError as exc:
@@ -99,6 +102,8 @@ def extract_frames(
                     raise FrameExtractionUnavailable("Video frame could not be stored")
                 frames.append(frame_path)
                 saved += 1
+                if saved >= frame_limit:
+                    break
             index += 1
         if not frames:
             raise FrameExtractionUnavailable("Video contains no decodable frames")
@@ -187,7 +192,10 @@ async def analyze_inspection(
 
         async with SessionLocal() as db:
             await db.execute(
-                delete(Finding).where(Finding.inspection_id == inspection_id)
+                delete(Finding).where(
+                    Finding.inspection_id == inspection_id,
+                    Finding.status == FindingStatus.OPEN.value,
+                )
             )
             for media_id, detections in detected:
                 for detection in detections:

@@ -12,6 +12,7 @@ from pathlib import Path
 import anyio
 
 from config import settings
+from utils import normalize_severity
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +101,7 @@ async def detect_damage(image_path: Path) -> DetectionBatch:
                 detections.append(
                     Detection(
                         finding_type=_classify_damage_type(normalized),
-                        severity=_provisional_severity(float(label.score)),
+                        severity=normalize_severity(_provisional_severity(float(label.score))),
                         confidence=float(label.score),
                         description=description,
                     )

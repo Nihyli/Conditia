@@ -28,7 +28,24 @@ vi.mock("../api", async (importOriginal) => {
 });
 
 function renderSettings(value: session.AuthSession) {
-  vi.mocked(session.fetchSession).mockResolvedValue(value);
+  const payload = {
+    available_fleets: [] as session.AuthFleet[],
+    ...value,
+  };
+  if (payload.auth_mode === "jwt" && payload.user_id) {
+    const fleets =
+      payload.available_fleets.length > 0
+        ? payload.available_fleets
+        : payload.fleet_id
+          ? [{ fleet_id: payload.fleet_id, role: payload.role ?? "viewer" }]
+          : [];
+    payload.available_fleets = fleets;
+    vi.mocked(session.fetchSession)
+      .mockResolvedValueOnce(payload)
+      .mockResolvedValueOnce(payload);
+  } else {
+    vi.mocked(session.fetchSession).mockResolvedValue(payload);
+  }
   render(
     <AuthProvider>
       <SettingsPage />
@@ -69,6 +86,7 @@ describe("SettingsPage", () => {
       user_id: null,
       fleet_id: null,
       role: "admin",
+      available_fleets: [],
     });
 
     expect(

@@ -47,6 +47,7 @@ describe("AuthProvider", () => {
       user_id: null,
       fleet_id: null,
       role: "admin",
+      available_fleets: [],
     });
 
     render(
@@ -67,6 +68,7 @@ describe("AuthProvider", () => {
       user_id: null,
       fleet_id: null,
       role: null,
+      available_fleets: [],
     });
 
     render(
@@ -76,7 +78,7 @@ describe("AuthProvider", () => {
     );
 
     expect(await screen.findByTestId("needs-sign-in")).toHaveTextContent("true");
-    expect(screen.getByTestId("initials")).toHaveTextContent("CF");
+    expect(screen.getByTestId("initials")).toHaveTextContent("CO");
   });
 
   it("signs in with a token and clears it when validation fails", async () => {
@@ -109,12 +111,16 @@ describe("AuthProvider", () => {
   });
 
   it("signs out and clears the stored token", async () => {
-    vi.mocked(session.fetchSession).mockResolvedValueOnce({
-      auth_mode: "jwt",
+    const sessionPayload = {
+      auth_mode: "jwt" as const,
       user_id: "user-1",
       fleet_id: "fleet-1",
       role: "inspector",
-    });
+      available_fleets: [{ fleet_id: "fleet-1", role: "inspector" }],
+    };
+    vi.mocked(session.fetchSession)
+      .mockResolvedValueOnce(sessionPayload)
+      .mockResolvedValueOnce(sessionPayload);
     const user = userEvent.setup();
 
     render(

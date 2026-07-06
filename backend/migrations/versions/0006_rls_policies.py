@@ -27,6 +27,12 @@ _TABLES = (
     "reports",
 )
 
+# asyncpg refuses multiple commands in one prepared statement, so every batch
+# below is split into single statements before execution.
+def _statements(sql: str) -> list[str]:
+    return [statement.strip() for statement in sql.split(";") if statement.strip()]
+
+
 _ENABLE = "\n".join(
     f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY;" for table in _TABLES
 )
@@ -145,12 +151,12 @@ _DISABLE = "\n".join(
 def upgrade() -> None:
     if op.get_bind().dialect.name != "postgresql":
         return
-    op.execute(_ENABLE)
-    op.execute(_POLICIES)
+    for statement in _statements(_ENABLE) + _statements(_POLICIES):
+        op.execute(statement)
 
 
 def downgrade() -> None:
     if op.get_bind().dialect.name != "postgresql":
         return
-    op.execute(_DROP_POLICIES)
-    op.execute(_DISABLE)
+    for statement in _statements(_DROP_POLICIES) + _statements(_DISABLE):
+        op.execute(statement)

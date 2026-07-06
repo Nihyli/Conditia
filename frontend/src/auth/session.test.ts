@@ -63,6 +63,7 @@ describe("fetchSession", () => {
       user_id: "user-1",
       fleet_id: "fleet-1",
       role: "admin",
+      available_fleets: [],
     });
   });
 

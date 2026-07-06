@@ -31,6 +31,8 @@ def production_settings(**overrides) -> dict:
         "supabase_key": "service-role-key",
         "docs_enabled": False,
         "cors_origins": "https://fleet.example.com",
+        "rate_limit_per_minute": 120,
+        "database_ssl_insecure": True,
     }
     values.update(overrides)
     return values
@@ -66,6 +68,14 @@ def test_settings_reject_invalid_limits(overrides, message) -> None:
         ({"api_fleet_id": None}, "API_FLEET_ID"),
         ({"auth_mode": "jwt", "jwt_secret": None}, "JWT_SECRET"),
         ({"cors_origins": "http://localhost:5173"}, "deployed origins"),
+        ({"rate_limit_per_minute": 0}, "RATE_LIMIT_PER_MINUTE"),
+        (
+            {
+                "auth_mode": "jwt",
+                "jwt_secret": "conditia-local-dev-jwt-secret-change-me-32chars",
+            },
+            "development default",
+        ),
     ],
 )
 def test_production_settings_fail_closed(overrides, message) -> None:

@@ -85,6 +85,8 @@ def _mint_token(*, user_id: str, secret: str, hours: int) -> str:
 
 
 async def main() -> None:
+    if settings.environment == "production":
+        raise SystemExit("mint_dev_token.py must not run in production")
     parser = argparse.ArgumentParser(description="Mint a local JWT for Conditia.")
     parser.add_argument(
         "--role",

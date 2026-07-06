@@ -18,7 +18,7 @@ function Stop-AllConditiaPython {
             }
         }
 
-    foreach ($name in @("uvicorn", "python", "pythonw")) {
+    foreach ($name in @("uvicorn")) {
         taskkill /F /IM "$name.exe" /T 2>$null | Out-Null
     }
 
@@ -153,10 +153,15 @@ Write-Host "Running database migrations (alembic upgrade head)..."
 python -m alembic upgrade head
 if ($LASTEXITCODE -ne 0) {
     Write-Host ""
-    Write-Host "Alembic failed - Supabase likely has OLD tables from a prior Dev setup."
-    Write-Host "1. Open Supabase dashboard -> SQL Editor"
-    Write-Host '2. Run: backend\scripts\reset_supabase_dev.sql'
-    Write-Host "3. Then: python -m alembic upgrade head"
+    Write-Host "Alembic migration failed. Read the error above first."
+    Write-Host "Common causes:"
+    Write-Host "  - Orphan tables from an old dev DB without alembic_version"
+    Write-Host "  - Wrong DATABASE_URL or credentials"
+    Write-Host "  - Pending migration SQL incompatible with existing data"
+    Write-Host ""
+    Write-Host "Only reset the database if you intend to wipe all local/dev data:"
+    Write-Host '  backend\scripts\reset_supabase_dev.sql  (Supabase SQL Editor)'
+    Write-Host "Then re-run: python -m alembic upgrade head"
     exit 1
 }
 

@@ -1,9 +1,11 @@
 """Who is calling, and what they're allowed to do."""
 
+import logging
 import secrets
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
+from uuid import UUID
 
 import jwt
 from fastapi import Depends, Header, HTTPException, status
@@ -14,6 +16,8 @@ from config import settings
 from database import get_db
 from domain import FleetRole
 from models.db_models import FleetMembership
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -27,21 +31,38 @@ class Principal:
         return self.user_id is None and self.role == FleetRole.ADMIN
 
 
+def _normalize_fleet_id(raw: str | None) -> str | None:
+    if raw is None:
+        return None
+    value = raw.strip()
+    if not value:
+        return None
+    try:
+        return str(UUID(value))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="X-Fleet-ID must be a valid UUID",
+        ) from exc
+
+
 def _decode_bearer_token(token: str) -> str:
     if settings.jwt_secret is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="JWT auth is not configured",
         )
+    decode_kwargs: dict[str, Any] = {
+        "algorithms": ["HS256"],
+        "audience": "authenticated",
+        "options": {"require": ["sub", "exp"]},
+    }
+    if settings.jwt_issuer:
+        decode_kwargs["issuer"] = settings.jwt_issuer
     try:
-        payload = jwt.decode(
-            token,
-            settings.jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated",
-            options={"require": ["sub", "exp"]},
-        )
+        payload = jwt.decode(token, settings.jwt_secret, **decode_kwargs)
     except jwt.PyJWTError:
+        logger.info("auth.jwt_rejected", extra={"reason": "invalid_or_expired"})
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired session",
@@ -101,11 +122,13 @@ async def require_api_access(
 
     if settings.auth_mode == "api_key":
         if settings.api_key is None or x_api_key is None:
+            logger.info("auth.api_key_rejected", extra={"reason": "missing"})
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Authentication required",
             )
         if not secrets.compare_digest(x_api_key, settings.api_key):
+            logger.info("auth.api_key_rejected", extra={"reason": "mismatch"})
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Authentication required",
@@ -120,6 +143,7 @@ async def require_api_access(
         )
 
     if authorization is None or not authorization.startswith("Bearer "):
+        logger.info("auth.jwt_rejected", extra={"reason": "missing_bearer"})
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Sign in required",
@@ -132,7 +156,8 @@ async def require_api_access(
         )
 
     user_id = _decode_bearer_token(token)
-    membership = await _select_membership(db, user_id, x_fleet_id)
+    fleet_header = _normalize_fleet_id(x_fleet_id)
+    membership = await _select_membership(db, user_id, fleet_header)
     try:
         role = FleetRole(membership.role)
     except ValueError:

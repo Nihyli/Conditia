@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main, Shelton]
+    branches: [main, Dev]
 
 permissions:
   contents: read
@@ -28,7 +28,40 @@ jobs:
       - run: python -m pytest -q --cov --cov-report=term-missing --cov-fail-under=80
       - run: DATABASE_URL=sqlite+aiosqlite:////tmp/conditia-ci.db python -m alembic upgrade head
       - run: DATABASE_URL=sqlite+aiosqlite:////tmp/conditia-ci.db python -m alembic check
+      - run: python -m pip_audit -r requirements.txt
       - run: python -m pip_audit -r requirements-dev.txt
+
+  backend-postgres:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: conditia
+          POSTGRES_PASSWORD: conditia
+          POSTGRES_DB: conditia
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U conditia -d conditia"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
+      - run: python -m pip install -r requirements-dev.txt
+      - run: DATABASE_URL=postgresql+asyncpg://conditia:conditia@127.0.0.1:5432/conditia DATABASE_SSL_INSECURE=true python -m alembic upgrade head
+      - run: DATABASE_URL=postgresql+asyncpg://conditia:conditia@127.0.0.1:5432/conditia DATABASE_SSL_INSECURE=true python -m alembic check
 
   frontend:
     runs-on: ubuntu-latest

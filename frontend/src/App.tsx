@@ -15,8 +15,40 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { TruckDetailPage } from "./pages/TruckDetailPage";
 import { TrucksPage } from "./pages/TrucksPage";
 
+function FleetSelectPage() {
+  const { session, selectFleet } = useAuth();
+  const fleets = session?.available_fleets ?? [];
+
+  return (
+    <div className="signin">
+      <main className="signin-main">
+        <div className="signin-main__inner">
+          <h2 className="signin-main__title">Choose a fleet</h2>
+          <p className="signin-links__hint">
+            Your account belongs to multiple fleets. Pick one to continue.
+          </p>
+          <div className="signin-form">
+            {fleets.map((fleet) => (
+              <button
+                key={fleet.fleet_id}
+                type="button"
+                className="signin-submit"
+                onClick={() => {
+                  void selectFleet(fleet.fleet_id);
+                }}
+              >
+                {fleet.fleet_id.slice(0, 8)}… ({fleet.role})
+              </button>
+            ))}
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}
+
 function AppRoutes() {
-  const { status, needsSignIn } = useAuth();
+  const { status, needsSignIn, needsFleetSelection } = useAuth();
 
   if (status === "loading") {
     return <div className="app-loading">Loading…</div>;
@@ -24,6 +56,10 @@ function AppRoutes() {
 
   if (needsSignIn) {
     return <LoginPage />;
+  }
+
+  if (needsFleetSelection) {
+    return <FleetSelectPage />;
   }
 
   return (

@@ -22,8 +22,11 @@ os.environ["STORAGE_DIR"] = str(TEST_STORAGE)
 os.environ["AUTH_MODE"] = "disabled"
 os.environ["SEED_ON_STARTUP"] = "false"
 
-from database import Base, engine  # noqa: E402
+from database import Base, SessionLocal, engine  # noqa: E402
 from main import app  # noqa: E402
+from models.db_models import Fleet  # noqa: E402
+
+TEST_FLEET_ID = "00000000-0000-0000-0000-000000000001"
 
 
 @pytest.fixture(autouse=True)
@@ -31,6 +34,9 @@ async def reset_state() -> AsyncGenerator[None, None]:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.drop_all)
         await connection.run_sync(Base.metadata.create_all)
+    async with SessionLocal() as session:
+        session.add(Fleet(id=TEST_FLEET_ID, name="Test Fleet"))
+        await session.commit()
     shutil.rmtree(TEST_STORAGE, ignore_errors=True)
     TEST_STORAGE.mkdir(parents=True, exist_ok=True)
     yield

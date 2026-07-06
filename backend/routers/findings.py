@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +14,7 @@ from models.schemas import FindingOut, FindingUpdate
 from security import Principal, require_api_access, require_roles
 
 router = APIRouter(prefix="/findings", tags=["findings"])
+logger = logging.getLogger(__name__)
 
 
 @router.get("", response_model=list[FindingOut])
@@ -41,6 +44,7 @@ async def list_findings(
 async def update_finding(
     finding_id: UUID,
     payload: FindingUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     principal: Principal = Depends(require_roles(FleetRole.INSPECTOR, FleetRole.ADMIN)),
 ):
@@ -57,11 +61,21 @@ async def update_finding(
 
     finding.status = payload.status.value
     finding.resolution_notes = payload.resolution_notes
-    finding.resolved_at = (
-        datetime.now(timezone.utc)
-        if payload.status in (FindingStatus.RESOLVED, FindingStatus.FALSE_POSITIVE)
-        else None
-    )
+    if payload.status in (FindingStatus.RESOLVED, FindingStatus.FALSE_POSITIVE):
+        finding.resolved_at = datetime.now(timezone.utc)
+        finding.resolved_by = principal.user_id
+    else:
+        finding.resolved_at = None
+        finding.resolved_by = None
     await db.commit()
     await db.refresh(finding)
+    logger.info(
+        "finding.updated",
+        extra={
+            "request_id": getattr(request.state, "request_id", None),
+            "actor": principal.user_id,
+            "finding_id": finding.id,
+            "status": finding.status,
+        },
+    )
     return finding

@@ -25,6 +25,8 @@ async def create_truck(
         if values["fleet_id"] not in (None, principal.fleet_id):
             raise HTTPException(403, "Fleet access denied")
         values["fleet_id"] = principal.fleet_id
+    elif values["fleet_id"] is None:
+        raise HTTPException(400, "Fleet scope is required to register a truck")
     if values["fleet_id"] is not None and await db.get(Fleet, values["fleet_id"]) is None:
         raise HTTPException(404, "Fleet not found")
     truck = Truck(**values)
@@ -33,7 +35,7 @@ async def create_truck(
         await db.commit()
     except IntegrityError as exc:
         await db.rollback()
-        raise HTTPException(409, "A truck with this VIN already exists") from exc
+        raise HTTPException(409, "A truck with this VIN is already registered") from exc
     await db.refresh(truck)
     return truck
 

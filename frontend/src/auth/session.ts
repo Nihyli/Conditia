@@ -1,4 +1,5 @@
 const TOKEN_KEY = "conditia.access_token";
+const FLEET_ID_KEY = "conditia.fleet_id";
 
 export function getAccessToken(): string | null {
   return sessionStorage.getItem(TOKEN_KEY);
@@ -12,10 +13,34 @@ export function clearAccessToken(): void {
   sessionStorage.removeItem(TOKEN_KEY);
 }
 
+export function getFleetId(): string | null {
+  return sessionStorage.getItem(FLEET_ID_KEY);
+}
+
+export function setFleetId(fleetId: string): void {
+  sessionStorage.setItem(FLEET_ID_KEY, fleetId);
+}
+
+export function clearFleetId(): void {
+  sessionStorage.removeItem(FLEET_ID_KEY);
+}
+
 export function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
   const token = getAccessToken();
-  if (!token) return {};
-  return { Authorization: `Bearer ${token}` };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const fleetId = getFleetId();
+  if (fleetId) {
+    headers["X-Fleet-ID"] = fleetId;
+  }
+  return headers;
+}
+
+export interface AuthFleet {
+  fleet_id: string;
+  role: string;
 }
 
 export interface AuthSession {
@@ -23,6 +48,7 @@ export interface AuthSession {
   user_id: string | null;
   fleet_id: string | null;
   role: string | null;
+  available_fleets: AuthFleet[];
 }
 
 export async function fetchSession(): Promise<AuthSession> {
@@ -47,5 +73,9 @@ export async function fetchSession(): Promise<AuthSession> {
     }
     throw new Error(detail);
   }
-  return response.json() as Promise<AuthSession>;
+  const session = (await response.json()) as AuthSession;
+  return {
+    ...session,
+    available_fleets: session.available_fleets ?? [],
+  };
 }

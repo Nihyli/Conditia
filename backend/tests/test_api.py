@@ -47,6 +47,7 @@ VALID_TRUCK = {
     "model": "Cascadia",
     "year": 2021,
     "license_plate": "TRK-041",
+    "fleet_id": "00000000-0000-0000-0000-000000000001",
 }
 PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
@@ -108,7 +109,9 @@ async def test_duplicate_vin_is_a_safe_conflict(client: AsyncClient) -> None:
     duplicate = await client.post("/trucks", json=VALID_TRUCK)
 
     assert duplicate.status_code == 409
-    assert duplicate.json() == {"detail": "A truck with this VIN already exists"}
+    assert duplicate.json() == {
+        "detail": "A truck with this VIN is already registered"
+    }
 
 
 @pytest.mark.asyncio
@@ -376,6 +379,8 @@ def test_production_settings_require_auth_fleet_and_private_media() -> None:
         supabase_key="service-role-key",
         docs_enabled=False,
         cors_origins="https://fleet.example.com",
+        rate_limit_per_minute=120,
+        database_ssl_insecure=True,
     )
     assert production.environment == "production"
 
@@ -445,7 +450,10 @@ async def test_inspection_list_uses_bounded_query_count(client: AsyncClient) -> 
         "1XPBDP9X1ND000088",
     )
     for vin in vins:
-        truck = await client.post("/trucks", json={"vin": vin})
+        truck = await client.post(
+            "/trucks",
+            json={"vin": vin, "fleet_id": VALID_TRUCK["fleet_id"]},
+        )
         assert truck.status_code == 201
         inspection = await client.post(
             "/inspections",

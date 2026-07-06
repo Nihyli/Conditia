@@ -4,7 +4,9 @@ import { IconBell, IconChevronDown, IconPlus } from "./icons";
 import { ORG_NAME } from "../data";
 
 export function Topbar({ title }: { title: string }) {
-  const { initials, displayName, session, signOut } = useAuth();
+  const { initials, displayName, session, signOut, selectFleet } = useAuth();
+  const fleets = session?.available_fleets ?? [];
+  const canSwitchFleet = fleets.length > 1;
 
   return (
     <header className="topbar">
@@ -16,10 +18,37 @@ export function Topbar({ title }: { title: string }) {
         New inspection
       </Link>
 
-      <button className="org-switcher" disabled title="Organization switching is not available yet">
-        {ORG_NAME}
-        <IconChevronDown />
-      </button>
+      {canSwitchFleet ? (
+        <label className="org-switcher">
+          <span className="sr-only">Fleet</span>
+          <select
+            className="org-switcher__select"
+            value={session?.fleet_id ?? ""}
+            onChange={(event) => {
+              void selectFleet(event.target.value);
+            }}
+          >
+            <option value="" disabled>
+              Select fleet
+            </option>
+            {fleets.map((fleet) => (
+              <option key={fleet.fleet_id} value={fleet.fleet_id}>
+                Fleet {fleet.fleet_id.slice(0, 8)}… ({fleet.role})
+              </option>
+            ))}
+          </select>
+          <IconChevronDown />
+        </label>
+      ) : (
+        <button
+          className="org-switcher"
+          disabled
+          title="Organization switching is not available yet"
+        >
+          {ORG_NAME}
+          <IconChevronDown />
+        </button>
+      )}
 
       <button className="icon-btn" aria-label="Notifications" disabled>
         <IconBell size={19} />

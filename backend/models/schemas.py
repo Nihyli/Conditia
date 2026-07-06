@@ -81,6 +81,7 @@ class FindingOut(BaseModel):
     status: FindingStatus
     resolved_at: datetime | None
     resolution_notes: str | None
+    resolved_by: str | None = None
     zone: str | None = Field(default=None, max_length=64)
     location: str | None
     bounding_box: dict | None
@@ -125,6 +126,7 @@ class InspectionOut(BaseModel):
     completed_at: datetime | None
     status: InspectionStatus
     capture_source: CaptureSource
+    created_by: str | None = None
 
 
 class InspectionSummary(BaseModel):
@@ -166,11 +168,17 @@ class FleetStatsOut(BaseModel):
     open_findings: int
 
 
+class AuthFleetOut(BaseModel):
+    fleet_id: str
+    role: str
+
+
 class AuthSessionOut(BaseModel):
     auth_mode: str
     user_id: str | None = None
     fleet_id: str | None = None
     role: str | None = None
+    available_fleets: list[AuthFleetOut] = Field(default_factory=list)
 
 
 class FleetMemberOut(BaseModel):

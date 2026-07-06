@@ -276,6 +276,14 @@ export function mediaUrl(mediaId: string): string {
   return `${API_BASE}/inspection-media/${encodeURIComponent(mediaId)}/content`;
 }
 
+/** Mint a browser-loadable media URL (required when AUTH_MODE=jwt). */
+export async function resolveMediaUrl(mediaId: string): Promise<string> {
+  const result = await requestJson<{ url: string }>(
+    `/inspection-media/${encodeURIComponent(mediaId)}/access`
+  );
+  return `${API_BASE}${result.url}`;
+}
+
 export function getFleetStats(): Promise<ApiFleetStats> {
   return requestJson<ApiFleetStats>("/fleet/stats");
 }

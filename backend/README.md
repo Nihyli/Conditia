@@ -100,6 +100,7 @@ curl -s -H "Authorization: Bearer <token>" http://127.0.0.1:8001/auth/me
 ENVIRONMENT=production
 AUTH_MODE=jwt
 JWT_SECRET=<Supabase project JWT secret>
+JWT_ISSUER=https://<project-ref>.supabase.co/auth/v1
 STORAGE_BACKEND=supabase
 SUPABASE_URL=https://<project>.supabase.co
 SUPABASE_KEY=<service role key>
@@ -108,11 +109,34 @@ DOCS_ENABLED=false
 CORS_ORIGINS=https://fleet.example.com
 ```
 
+Frontend (copy `frontend/.env.example` to `frontend/.env.local`):
+
+```dotenv
+VITE_SUPABASE_URL=https://<project>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon public key>
+```
+
+The app signs users in with Supabase Auth (email/password). The access token is sent
+to this API as `Authorization: Bearer`. Tokens refresh automatically via
+`@supabase/supabase-js`.
+
 Each Supabase user needs a `fleet_memberships` row. The API trusts the JWT for
 identity, the table for fleet + role.
 
 Machine clients can use `AUTH_MODE=api_key` with `X-API-Key` and `API_FLEET_ID`.
 That path has no user id — treat it as a service account.
+
+### Postgres TLS (SEC-1)
+
+Supabase connections enable TLS automatically, but **certificate verification**
+requires pinning the project CA:
+
+1. Dashboard → **Database → SSL Configuration** → download the root certificate
+2. Save as `backend/certs/supabase-ca.crt` (gitignored)
+3. Set `DATABASE_SSL_CA=./certs/supabase-ca.crt` in `.env`
+
+Production refuses to start without verified TLS unless `DATABASE_SSL_INSECURE=true`
+is set explicitly. See `backend/certs/README.md`.
 
 Clients send `Authorization: Bearer <token>`.
 

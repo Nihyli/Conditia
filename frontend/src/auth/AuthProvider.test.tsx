@@ -11,8 +11,15 @@ vi.mock("./session", async (importOriginal) => {
     fetchSession: vi.fn(),
     setAccessToken: vi.fn(),
     clearAccessToken: vi.fn(),
+    setCachedAccessToken: vi.fn(),
+    clearFleetId: vi.fn(),
   };
 });
+
+vi.mock("./supabase", () => ({
+  getSupabaseClient: vi.fn(() => null),
+  isSupabaseConfigured: vi.fn(() => false),
+}));
 
 function AuthProbe() {
   const auth = useAuth();
@@ -88,6 +95,7 @@ describe("AuthProvider", () => {
         user_id: null,
         fleet_id: null,
         role: null,
+        available_fleets: [],
       })
       .mockRejectedValueOnce(new Error("invalid"));
     const user = userEvent.setup();

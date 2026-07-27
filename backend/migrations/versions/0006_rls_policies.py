@@ -1,9 +1,10 @@
 """Row-level security policies for tenant isolation (PostgreSQL/Supabase only).
 
-Defense-in-depth: even if the API's fleet predicate is bypassed, the database
-refuses cross-tenant rows for browser/anon roles. The trusted backend service
-role bypasses RLS to provision memberships. SQLite (local dev) has no RLS, so
-this migration is a no-op there.
+These policies protect direct PostgREST/anon-key access by restricting rows to
+the authenticated user's fleet memberships.  The backend API connects as the
+table owner, which bypasses RLS (ENABLE without FORCE) — all real tenant
+isolation for API requests is the application-level fleet predicate in each
+query.  SQLite (local dev) has no RLS, so this migration is a no-op there.
 """
 
 from collections.abc import Sequence

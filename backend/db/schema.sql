@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS findings (
   finding_type             TEXT NOT NULL CHECK (finding_type IN (
                              'dent','scratch','crack',
                              'missing_component','rust','anomaly')),
-  severity                 TEXT NOT NULL CHECK (severity IN ('low','medium','high','critical','clear')),
+  severity                 TEXT NOT NULL CHECK (severity IN ('low','medium','critical','clear')),
   confidence               DOUBLE PRECISION NOT NULL CHECK (confidence BETWEEN 0 AND 1),
   status                   TEXT NOT NULL CHECK (status IN (
                              'open','acknowledged','resolved','false_positive'

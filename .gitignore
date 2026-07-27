@@ -21,6 +21,9 @@ venv/
 *.db-shm
 *.db-wal
 backend/storage/
+backend/certs/*.crt
+backend/certs/*.cer
+backend/certs/*.pem
 
 # Env / secrets
 .env
@@ -28,6 +31,9 @@ backend/storage/
 !.env.example
 service-account*.json
 *-credentials.json
+
+# Stray PowerShell redirect artifact
+$null
 
 # Editor / OS
 .DS_Store

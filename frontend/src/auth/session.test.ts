@@ -5,6 +5,7 @@ import {
   fetchSession,
   getAccessToken,
   setAccessToken,
+  setCachedAccessToken,
 } from "./session";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -17,10 +18,12 @@ function jsonResponse(body: unknown, status = 200): Response {
 describe("session storage helpers", () => {
   beforeEach(() => {
     sessionStorage.clear();
+    setCachedAccessToken(null);
   });
 
   afterEach(() => {
     sessionStorage.clear();
+    setCachedAccessToken(null);
   });
 
   it("stores, reads, and clears the access token", () => {
@@ -35,6 +38,9 @@ describe("session storage helpers", () => {
     expect(authHeaders()).toEqual({});
     setAccessToken("eyJ.token");
     expect(authHeaders()).toEqual({ Authorization: "Bearer eyJ.token" });
+    clearAccessToken();
+    setCachedAccessToken("cached.token");
+    expect(authHeaders()).toEqual({ Authorization: "Bearer cached.token" });
   });
 });
 

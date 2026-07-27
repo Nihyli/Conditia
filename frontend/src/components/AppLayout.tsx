@@ -24,10 +24,13 @@ export function AppLayout() {
 
   return (
     <div className="app">
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
       <Sidebar trucksBadge={trucksBadge} />
       <div className="main">
         <Topbar title={pageTitle(pathname)} />
-        <main className="content">
+        <main id="main-content" className="content">
           <Outlet />
         </main>
       </div>

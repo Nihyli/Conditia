@@ -1,5 +1,6 @@
 import { FormEvent, useId, useState } from "react";
 import { useAuth } from "../auth/AuthProvider";
+import { isSupabaseConfigured } from "../auth/supabase";
 
 function normalizeToken(raw: string): string {
   const trimmed = raw.trim();
@@ -28,9 +29,13 @@ function ConditiaLogo({ light = false }: { light?: boolean }) {
   );
 }
 
-export function LoginPage() {
-  const { signInWithToken } = useAuth();
+function DevTokenSignIn({
+  signInWithToken,
+}: {
+  signInWithToken: (token: string) => Promise<void>;
+}) {
   const fieldId = useId();
+  const [open, setOpen] = useState(false);
   const [token, setToken] = useState("");
   const [visible, setVisible] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +49,102 @@ export function LoginPage() {
       await signInWithToken(normalizeToken(token));
     } catch {
       setError(
-        "Sign in failed. Confirm AUTH_MODE=jwt in backend/.env, restart the API, and mint a fresh token."
+        "Token sign-in failed. Mint a fresh token with scripts/mint_dev_token.py."
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="signin-advanced">
+      <button
+        type="button"
+        className="signin-advanced__toggle"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+      >
+        {open ? "Hide developer token sign-in" : "Developer token sign-in"}
+      </button>
+      {open ? (
+        <form className="signin-form signin-form--advanced" onSubmit={onSubmit}>
+          <div className="signin-field">
+            <label className="signin-field__label" htmlFor={fieldId}>
+              Access token
+            </label>
+            <textarea
+              id={fieldId}
+              className={`signin-field__input mono${error ? " is-error" : ""}${visible ? "" : " is-masked"}`}
+              rows={3}
+              value={token}
+              onChange={(event) => {
+                setToken(event.target.value);
+                if (error) setError(null);
+              }}
+              onPaste={(event) => {
+                event.preventDefault();
+                setToken(normalizeToken(event.clipboardData.getData("text")));
+                if (error) setError(null);
+              }}
+              placeholder="Paste token from mint_dev_token.py"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </div>
+          <button
+            type="button"
+            className="signin-field__toggle"
+            onClick={() => setVisible((value) => !value)}
+          >
+            {visible ? "Hide token" : "Show token"}
+          </button>
+          {error ? (
+            <p className="signin-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+          <button
+            type="submit"
+            className="signin-submit signin-submit--secondary"
+            disabled={busy || !token.trim()}
+          >
+            {busy ? "Signing in…" : "Sign in with token"}
+          </button>
+        </form>
+      ) : null}
+    </div>
+  );
+}
+
+export function LoginPage() {
+  const { signInWithEmail, signInWithToken, usesSupabaseAuth } = useAuth();
+  const emailId = useId();
+  const passwordId = useId();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const supabaseMode = usesSupabaseAuth || isSupabaseConfigured();
+  const showDevToken = import.meta.env.DEV || !supabaseMode;
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    setError(null);
+    setBusy(true);
+    try {
+      if (supabaseMode) {
+        await signInWithEmail(email, password);
+      } else {
+        await signInWithToken(normalizeToken(password));
+      }
+    } catch (caught) {
+      const message =
+        caught instanceof Error ? caught.message : "Sign in failed";
+      setError(
+        supabaseMode
+          ? message
+          : "Sign in failed. Confirm AUTH_MODE=jwt in backend/.env and mint a fresh token."
       );
     } finally {
       setBusy(false);
@@ -75,58 +175,126 @@ export function LoginPage() {
 
           <h2 className="signin-main__title">Fleet Sign In</h2>
 
-          <form className="signin-form" onSubmit={onSubmit} noValidate>
-            <div className="signin-field">
-              <label className="signin-field__label" htmlFor={fieldId}>
-                Access token
-              </label>
-              <textarea
-                id={fieldId}
-                className={`signin-field__input mono${error ? " is-error" : ""}${visible ? "" : " is-masked"}`}
-                rows={3}
-                value={token}
-                onChange={(event) => {
-                  setToken(event.target.value);
-                  if (error) setError(null);
-                }}
-                onPaste={(event) => {
-                  event.preventDefault();
-                  setToken(normalizeToken(event.clipboardData.getData("text")));
-                  if (error) setError(null);
-                }}
-                placeholder="Paste token from your administrator"
-                autoComplete="off"
-                spellCheck={false}
-                aria-invalid={error ? true : undefined}
-                aria-describedby={error ? `${fieldId}-error` : undefined}
-              />
-            </div>
+          {supabaseMode ? (
+            <form className="signin-form" onSubmit={onSubmit} noValidate>
+              <div className="signin-field">
+                <label className="signin-field__label" htmlFor={emailId}>
+                  Email
+                </label>
+                <input
+                  id={emailId}
+                  className={`signin-field__input${error ? " is-error" : ""}`}
+                  type="email"
+                  value={email}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    if (error) setError(null);
+                  }}
+                  placeholder="you@fleet.example"
+                  autoComplete="email"
+                  required
+                />
+              </div>
 
-            <button
-              type="button"
-              className="signin-field__toggle"
-              onClick={() => setVisible((v) => !v)}
-            >
-              {visible ? "Hide token" : "Show token"}
-            </button>
+              <div className="signin-field">
+                <label className="signin-field__label" htmlFor={passwordId}>
+                  Password
+                </label>
+                <input
+                  id={passwordId}
+                  className={`signin-field__input${error ? " is-error" : ""}`}
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    if (error) setError(null);
+                  }}
+                  placeholder="Your password"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
 
-            {error ? (
-              <p className="signin-error" id={`${fieldId}-error`} role="alert">
-                {error}
-              </p>
-            ) : null}
+              <button
+                type="button"
+                className="signin-field__toggle"
+                onClick={() => setShowPassword((value) => !value)}
+              >
+                {showPassword ? "Hide password" : "Show password"}
+              </button>
 
-            <button
-              type="submit"
-              className="signin-submit"
-              disabled={busy || !token.trim()}
-            >
-              {busy ? "Signing in…" : "Sign in"}
-            </button>
-          </form>
+              {error ? (
+                <p className="signin-error" role="alert">
+                  {error}
+                </p>
+              ) : null}
+
+              <button
+                type="submit"
+                className="signin-submit"
+                disabled={busy || !email.trim() || !password}
+              >
+                {busy ? "Signing in…" : "Sign in"}
+              </button>
+            </form>
+          ) : (
+            <form className="signin-form" onSubmit={onSubmit} noValidate>
+              <div className="signin-field">
+                <label className="signin-field__label" htmlFor={passwordId}>
+                  Access token
+                </label>
+                <textarea
+                  id={passwordId}
+                  className={`signin-field__input mono${error ? " is-error" : ""}${showPassword ? "" : " is-masked"}`}
+                  rows={3}
+                  value={password}
+                  onChange={(event) => {
+                    setPassword(event.target.value);
+                    if (error) setError(null);
+                  }}
+                  onPaste={(event) => {
+                    event.preventDefault();
+                    setPassword(
+                      normalizeToken(event.clipboardData.getData("text"))
+                    );
+                    if (error) setError(null);
+                  }}
+                  placeholder="Paste token from your administrator"
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </div>
+
+              <button
+                type="button"
+                className="signin-field__toggle"
+                onClick={() => setShowPassword((value) => !value)}
+              >
+                {showPassword ? "Hide token" : "Show token"}
+              </button>
+
+              {error ? (
+                <p className="signin-error" role="alert">
+                  {error}
+                </p>
+              ) : null}
+
+              <button
+                type="submit"
+                className="signin-submit"
+                disabled={busy || !password.trim()}
+              >
+                {busy ? "Signing in…" : "Sign in"}
+              </button>
+            </form>
+          )}
 
           <div className="signin-links">
-            {import.meta.env.DEV ? (
+            {supabaseMode ? (
+              <p className="signin-links__hint">
+                Trouble signing in? Contact your fleet administrator.
+              </p>
+            ) : import.meta.env.DEV ? (
               <p className="signin-links__hint">
                 Local dev: run{" "}
                 <code>python scripts/mint_dev_token.py</code> in{" "}
@@ -138,6 +306,10 @@ export function LoginPage() {
               </p>
             )}
           </div>
+
+          {showDevToken && supabaseMode ? (
+            <DevTokenSignIn signInWithToken={signInWithToken} />
+          ) : null}
         </div>
       </main>
     </div>

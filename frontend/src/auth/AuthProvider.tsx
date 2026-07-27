@@ -14,9 +14,11 @@ import {
   fetchSession,
   getFleetId,
   setAccessToken,
+  setCachedAccessToken,
   setFleetId,
   type AuthSession,
 } from "./session";
+import { getSupabaseClient, isSupabaseConfigured } from "./supabase";
 
 type AuthStatus = "loading" | "ready" | "signed_out";
 
@@ -25,9 +27,11 @@ interface AuthContextValue {
   session: AuthSession | null;
   needsSignIn: boolean;
   needsFleetSelection: boolean;
+  usesSupabaseAuth: boolean;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
   signInWithToken: (token: string) => Promise<void>;
   selectFleet: (fleetId: string) => Promise<void>;
-  signOut: () => void;
+  signOut: () => Promise<void>;
   displayName: string;
   initials: string;
 }
@@ -56,9 +60,18 @@ function syncFleetSelection(session: AuthSession): void {
   }
 }
 
+function applySupabaseAccessToken(accessToken: string | null | undefined): void {
+  if (accessToken) {
+    setCachedAccessToken(accessToken);
+    return;
+  }
+  setCachedAccessToken(null);
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [session, setSession] = useState<AuthSession | null>(null);
+  const usesSupabaseAuth = isSupabaseConfigured();
 
   const loadSession = useCallback(async (): Promise<AuthSession> => {
     let next = await fetchSession();
@@ -74,11 +87,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return next;
   }, []);
 
+  const bootstrap = useCallback(async () => {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const { data } = await supabase.auth.getSession();
+      applySupabaseAccessToken(data.session?.access_token);
+      if (!data.session) {
+        setSession(null);
+        setStatus("signed_out");
+        return;
+      }
+    }
+    await loadSession();
+  }, [loadSession]);
+
   useEffect(() => {
-    void loadSession().catch(() => {
+    void bootstrap().catch(() => {
       setSession(null);
       setStatus("signed_out");
     });
+  }, [bootstrap]);
+
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      return;
+    }
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      applySupabaseAccessToken(nextSession?.access_token);
+      if (!nextSession) {
+        setSession(null);
+        setStatus("signed_out");
+        clearFleetId();
+        return;
+      }
+      void loadSession().catch(() => {
+        setSession(null);
+        setStatus("signed_out");
+      });
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [loadSession]);
 
   const signInWithToken = useCallback(
@@ -98,6 +152,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [loadSession]
   );
 
+  const signInWithEmail = useCallback(
+    async (email: string, password: string) => {
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        throw new Error("Supabase auth is not configured");
+      }
+      clearFleetId();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) {
+        throw new Error(error.message);
+      }
+      applySupabaseAccessToken(data.session?.access_token);
+      try {
+        await loadSession();
+      } catch (loadError) {
+        await supabase.auth.signOut();
+        clearAccessToken();
+        clearFleetId();
+        setSession(null);
+        setStatus("signed_out");
+        throw loadError;
+      }
+    },
+    [loadSession]
+  );
+
   const selectFleet = useCallback(
     async (fleetId: string) => {
       setFleetId(fleetId);
@@ -106,7 +189,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [loadSession]
   );
 
-  const signOut = useCallback(() => {
+  const signOut = useCallback(async () => {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
     clearAccessToken();
     clearFleetId();
     setSession(null);
@@ -129,6 +216,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       needsSignIn,
       needsFleetSelection,
+      usesSupabaseAuth,
+      signInWithEmail,
       signInWithToken,
       selectFleet,
       signOut,
@@ -140,6 +229,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       needsSignIn,
       needsFleetSelection,
+      usesSupabaseAuth,
+      signInWithEmail,
       signInWithToken,
       selectFleet,
       signOut,

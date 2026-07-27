@@ -9,14 +9,27 @@ import { Sidebar } from "./Sidebar";
 import { StatCards } from "./StatCards";
 import { Topbar } from "./Topbar";
 import { CaptureAngleDiagram } from "./capture/CaptureAngleDiagram";
+import type { AuthSession } from "../auth/session";
 import { finding, inspection, photo, video } from "../test/fixtures";
+
+const signOut = vi.fn();
+const mockAuthSession = vi.hoisted(() => ({
+  value: {
+    auth_mode: "disabled",
+    user_id: null,
+    fleet_id: null,
+    role: "admin",
+    available_fleets: [],
+  } as AuthSession,
+}));
 
 vi.mock("../auth/AuthProvider", () => ({
   useAuth: () => ({
     initials: "IN",
     displayName: "inspector",
-    session: { auth_mode: "disabled", user_id: null, fleet_id: null, role: "admin" },
-    signOut: vi.fn(),
+    session: mockAuthSession.value,
+    signOut,
+    selectFleet: vi.fn(),
   }),
 }));
 
@@ -71,7 +84,39 @@ describe("shared dashboard components", () => {
       "/capture"
     );
     expect(screen.getByRole("button", { name: /notifications/i })).toBeDisabled();
-    expect(screen.getByRole("button", { name: /account/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/account/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /log out/i })).not.toBeInTheDocument();
+  });
+
+  it("shows a log out button when JWT auth is active", async () => {
+    const user = userEvent.setup();
+    mockAuthSession.value = {
+      auth_mode: "jwt",
+      user_id: "user-1",
+      fleet_id: "fleet-1",
+      role: "inspector",
+      available_fleets: [],
+    };
+    signOut.mockReset();
+
+    render(
+      <MemoryRouter>
+        <Topbar title="Fleet overview" />
+      </MemoryRouter>
+    );
+
+    const logout = screen.getByRole("button", { name: /log out/i });
+    expect(logout).toBeInTheDocument();
+    await user.click(logout);
+    expect(signOut).toHaveBeenCalled();
+
+    mockAuthSession.value = {
+      auth_mode: "disabled",
+      user_id: null,
+      fleet_id: null,
+      role: "admin",
+      available_fleets: [],
+    };
   });
 });
 

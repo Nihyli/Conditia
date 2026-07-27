@@ -1,7 +1,6 @@
+import logging
 from datetime import datetime, timezone
 from uuid import UUID
-
-import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select

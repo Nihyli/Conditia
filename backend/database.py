@@ -32,6 +32,9 @@ def _build_ssl_context(
     ca_path = settings.database_ssl_ca
     if ca_path and Path(ca_path).is_file():
         ctx = ssl_lib.create_default_context(cafile=ca_path)
+        ctx.verify_mode = ssl_lib.CERT_REQUIRED
+        # Pooler hostnames rarely match the server cert; verify-ca is the
+        # practical default unless the operator requests verify-full.
         ctx.check_hostname = sslmode == "verify-full"
         return ctx
 
@@ -99,6 +102,18 @@ def build_async_url(raw_url: str) -> tuple[str, dict]:
 
 
 async_database_url, _connect_args = build_async_url(settings.database_url)
+
+_url = settings.database_url
+if _connect_args.get("ssl") is not None:
+    _ssl_ctx = _connect_args["ssl"]
+    if _ssl_ctx.verify_mode == ssl_lib.CERT_NONE and _url.startswith(
+        ("postgres", "postgresql")
+    ):
+        logger.warning(
+            "Postgres TLS encrypts traffic but does not verify the server "
+            "certificate (MITM risk). Pin the Supabase CA with DATABASE_SSL_CA "
+            "— see backend/certs/README.md."
+        )
 
 engine = create_async_engine(
     async_database_url,

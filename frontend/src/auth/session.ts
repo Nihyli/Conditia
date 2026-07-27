@@ -1,15 +1,25 @@
 const TOKEN_KEY = "conditia.access_token";
 const FLEET_ID_KEY = "conditia.fleet_id";
 
+/** In-memory bearer from Supabase session refresh (preferred over sessionStorage). */
+let cachedAccessToken: string | null = null;
+
+export function setCachedAccessToken(token: string | null): void {
+  cachedAccessToken = token;
+}
+
 export function getAccessToken(): string | null {
-  return sessionStorage.getItem(TOKEN_KEY);
+  return cachedAccessToken ?? sessionStorage.getItem(TOKEN_KEY);
 }
 
 export function setAccessToken(token: string): void {
-  sessionStorage.setItem(TOKEN_KEY, token.trim());
+  const trimmed = token.trim();
+  cachedAccessToken = trimmed;
+  sessionStorage.setItem(TOKEN_KEY, trimmed);
 }
 
 export function clearAccessToken(): void {
+  cachedAccessToken = null;
   sessionStorage.removeItem(TOKEN_KEY);
 }
 

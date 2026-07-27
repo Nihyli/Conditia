@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager, suppress
 from uuid import uuid4
 
@@ -94,7 +95,7 @@ async def lifespan(app: FastAPI):
             "database_dialect": settings.database_url.split(":", 1)[0],
         },
     )
-    if settings.environment != "production":
+    if settings.environment != "production" and not os.environ.get("MIGRATIONS_RUN"):
         if is_postgres():
             run_migrations()
         else:

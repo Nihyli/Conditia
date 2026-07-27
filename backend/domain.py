@@ -58,7 +58,6 @@ class FindingStatus(str, Enum):
 class Severity(str, Enum):
     LOW = "low"
     MEDIUM = "medium"
-    HIGH = "high"
     CRITICAL = "critical"
     CLEAR = "clear"
 

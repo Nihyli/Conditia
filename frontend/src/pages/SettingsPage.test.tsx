@@ -27,9 +27,13 @@ vi.mock("../api", async (importOriginal) => {
   };
 });
 
-function renderSettings(value: session.AuthSession) {
-  const payload = {
-    available_fleets: [] as session.AuthFleet[],
+function renderSettings(
+  value: Omit<session.AuthSession, "available_fleets"> & {
+    available_fleets?: session.AuthFleet[];
+  },
+) {
+  const payload: session.AuthSession = {
+    available_fleets: [],
     ...value,
   };
   if (payload.auth_mode === "jwt" && payload.user_id) {

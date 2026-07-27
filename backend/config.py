@@ -108,6 +108,10 @@ class Settings(BaseSettings):
                 raise ValueError("CORS_ORIGINS must use deployed origins in production")
             if self.rate_limit_per_minute <= 0:
                 raise ValueError("RATE_LIMIT_PER_MINUTE must be positive in production")
+            if self.database_ssl_ca and not Path(self.database_ssl_ca).is_file():
+                raise ValueError(
+                    f"DATABASE_SSL_CA file not found: {self.database_ssl_ca}"
+                )
             if self._postgres_tls_unverified():
                 raise ValueError(
                     "Production Postgres requires DATABASE_SSL_CA or sslmode=verify-full "

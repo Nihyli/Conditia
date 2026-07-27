@@ -188,7 +188,7 @@ class Finding(Base):
             name="ck_finding_type",
         ),
         CheckConstraint(
-            "severity IN ('low','medium','high','critical','clear')",
+            "severity IN ('low','medium','critical','clear')",
             name="ck_finding_severity",
         ),
         CheckConstraint(
@@ -211,7 +211,7 @@ class Finding(Base):
     title: Mapped[str | None] = mapped_column(String)
     # dent | scratch | crack | missing_component | rust | anomaly
     finding_type: Mapped[str] = mapped_column(String)
-    # critical | medium | low | clear  (high is normalized to critical at write time)
+    # critical | medium | low | clear
     severity: Mapped[str] = mapped_column(String)
     confidence: Mapped[float] = mapped_column(Float, default=0.0)
     status: Mapped[str] = mapped_column(String, default="open")

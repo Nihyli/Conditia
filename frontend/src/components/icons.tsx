@@ -170,6 +170,15 @@ export const IconStop = (p: IconProps) => (
   </svg>
 );
 
+export const IconLogOut = (p: IconProps) => (
+  <svg {...base({ size: 16, ...p })}>
+    <path d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4" />
+    <path d="M14 12H4" />
+    <path d="M18 8l4 4-4 4" />
+    <path d="M12 12h10" />
+  </svg>
+);
+
 export const navIconMap = {
   overview: IconOverview,
   truck: IconTruck,

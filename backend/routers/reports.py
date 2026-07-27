@@ -1,15 +1,27 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models.db_models import Inspection, Report, Truck
+from models.db_models import Finding, Inspection, Report, Truck
 from models.schemas import ReportOut
 from security import Principal, require_api_access
 
 router = APIRouter(prefix="/reports", tags=["reports"])
+
+
+async def _annotate_staleness(db: AsyncSession, report: Report) -> ReportOut:
+    """Compare live finding counts against the snapshot to detect staleness."""
+    out = ReportOut.model_validate(report)
+    live_total = await db.scalar(
+        select(func.count())
+        .select_from(Finding)
+        .where(Finding.inspection_id == report.inspection_id)
+    )
+    out.findings_changed = (live_total or 0) != report.total_findings
+    return out
 
 
 @router.get("", response_model=list[ReportOut])
@@ -28,7 +40,10 @@ async def list_reports(
     result = await db.execute(
         statement.order_by(Report.generated_at.desc()).limit(limit)
     )
-    return result.scalars().all()
+    return [
+        await _annotate_staleness(db, report)
+        for report in result.scalars().all()
+    ]
 
 
 @router.get("/{inspection_id}", response_model=ReportOut)
@@ -48,4 +63,4 @@ async def get_report(
     report = result.scalar_one_or_none()
     if report is None:
         raise HTTPException(404, "Report not found")
-    return report
+    return await _annotate_staleness(db, report)

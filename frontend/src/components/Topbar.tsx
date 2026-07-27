@@ -1,12 +1,13 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthProvider";
-import { IconBell, IconChevronDown, IconPlus } from "./icons";
+import { IconBell, IconChevronDown, IconLogOut, IconPlus } from "./icons";
 import { ORG_NAME } from "../data";
 
 export function Topbar({ title }: { title: string }) {
   const { initials, displayName, session, signOut, selectFleet } = useAuth();
   const fleets = session?.available_fleets ?? [];
   const canSwitchFleet = fleets.length > 1;
+  const canSignOut = session?.auth_mode === "jwt";
 
   return (
     <header className="topbar">
@@ -55,15 +56,26 @@ export function Topbar({ title }: { title: string }) {
         <span className="icon-btn__dot" aria-hidden />
       </button>
 
-      <button
+      {canSignOut ? (
+        <button
+          type="button"
+          className="ghost-btn topbar__logout"
+          onClick={() => {
+            void signOut();
+          }}
+        >
+          <IconLogOut />
+          Log out
+        </button>
+      ) : null}
+
+      <span
         className="avatar"
-        aria-label={session?.auth_mode === "jwt" ? `Signed in as ${displayName}` : "Account"}
-        title={session?.auth_mode === "jwt" ? `${displayName} — click to sign out` : undefined}
-        onClick={session?.auth_mode === "jwt" ? signOut : undefined}
-        type="button"
+        aria-label={canSignOut ? `Signed in as ${displayName}` : "Account"}
+        title={canSignOut ? displayName : undefined}
       >
         {initials}
-      </button>
+      </span>
     </header>
   );
 }

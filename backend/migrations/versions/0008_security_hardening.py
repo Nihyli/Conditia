@@ -26,14 +26,24 @@ def upgrade() -> None:
         for uc in inspector.get_unique_constraints("trucks")
         if uc.get("column_names") == ["vin"]
     }
-    for name in truck_uniques:
-        op.drop_constraint(name, "trucks", type_="unique")
     if bind.dialect.name == "sqlite":
-        with op.batch_alter_table("trucks") as batch_op:
+        # Unnamed constraints (name=None) require a naming_convention so batch
+        # mode can match them.  Named constraints are dropped directly.
+        naming = {"uq": "uq_%(table_name)s_%(column_0_name)s"}
+        with op.batch_alter_table("trucks", naming_convention=naming) as batch_op:
+            for name in truck_uniques:
+                if name is not None:
+                    batch_op.drop_constraint(name, type_="unique")
+                else:
+                    batch_op.drop_constraint(
+                        "uq_trucks_vin", type_="unique"
+                    )
             batch_op.create_unique_constraint(
                 "uq_truck_fleet_vin", ["fleet_id", "vin"]
             )
     else:
+        for name in truck_uniques:
+            op.drop_constraint(name, "trucks", type_="unique")
         op.create_unique_constraint(
             "uq_truck_fleet_vin", "trucks", ["fleet_id", "vin"]
         )

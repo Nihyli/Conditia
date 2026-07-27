@@ -75,6 +75,24 @@ def _provisional_severity(score: float) -> str:
     return "low"
 
 
+_cached_vision_client = None
+
+
+def _get_or_create_client():
+    global _cached_vision_client
+    from google.cloud import vision  # type: ignore
+
+    if _cached_vision_client is None:
+        _cached_vision_client = vision.ImageAnnotatorClient()
+    return _cached_vision_client
+
+
+def reset_vision_client() -> None:
+    """Drop the cached client so the next call rebuilds it (used by tests)."""
+    global _cached_vision_client
+    _cached_vision_client = None
+
+
 async def detect_damage(image_path: Path) -> DetectionBatch:
     if not settings.google_vision_enabled:
         raise DetectorUnavailable("No damage detector is configured")
@@ -84,9 +102,9 @@ async def detect_damage(image_path: Path) -> DetectionBatch:
 
         content = await anyio.to_thread.run_sync(image_path.read_bytes)
         image = vision.Image(content=content)
+        client = _get_or_create_client()
 
         def call_google() -> object:
-            client = vision.ImageAnnotatorClient()
             return client.label_detection(image=image)
 
         response = await anyio.to_thread.run_sync(call_google)

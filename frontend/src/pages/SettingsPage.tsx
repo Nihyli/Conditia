@@ -37,7 +37,13 @@ export function SettingsPage() {
           <h2 className="panel__title">Account &amp; access</h2>
           <div className="panel__spacer" />
           {authMode === "jwt" ? (
-            <button type="button" className="ghost-btn" onClick={signOut}>
+            <button
+              type="button"
+              className="ghost-btn"
+              onClick={() => {
+                void signOut();
+              }}
+            >
               Sign out
             </button>
           ) : null}

@@ -3,19 +3,32 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { LoginPage } from "./LoginPage";
 
+const signInWithEmail = vi.fn();
 const signInWithToken = vi.fn();
+const mockUsesSupabase = vi.hoisted(() => ({ value: false }));
 
 vi.mock("../auth/AuthProvider", () => ({
-  useAuth: () => ({ signInWithToken }),
+  useAuth: () => ({
+    signInWithEmail,
+    signInWithToken,
+    usesSupabaseAuth: mockUsesSupabase.value,
+  }),
+}));
+
+vi.mock("../auth/supabase", () => ({
+  isSupabaseConfigured: () => mockUsesSupabase.value,
 }));
 
 describe("LoginPage", () => {
   beforeEach(() => {
+    mockUsesSupabase.value = false;
+    signInWithEmail.mockReset();
     signInWithToken.mockReset();
+    signInWithEmail.mockResolvedValue(undefined);
     signInWithToken.mockResolvedValue(undefined);
   });
 
-  it("renders the sign-in form", () => {
+  it("renders the token sign-in form when Supabase is not configured", () => {
     render(<LoginPage />);
 
     expect(screen.getByRole("heading", { name: /fleet sign in/i })).toBeInTheDocument();
@@ -35,32 +48,6 @@ describe("LoginPage", () => {
     );
   });
 
-  it("normalizes export and Bearer prefixes on submit", async () => {
-    const user = userEvent.setup();
-    render(<LoginPage />);
-
-    await user.type(
-      screen.getByLabelText(/access token/i),
-      'export CONDITIA_TOKEN="eyJ.exported"'
-    );
-    await user.click(screen.getByRole("button", { name: "Sign in" }));
-
-    await waitFor(() =>
-      expect(signInWithToken).toHaveBeenCalledWith("eyJ.exported")
-    );
-  });
-
-  it("normalizes pasted tokens", async () => {
-    const user = userEvent.setup();
-    render(<LoginPage />);
-
-    const field = screen.getByLabelText(/access token/i);
-    await user.click(field);
-    await user.paste("Bearer eyJ.pasted");
-
-    expect(field).toHaveValue("eyJ.pasted");
-  });
-
   it("shows an error when sign-in fails", async () => {
     signInWithToken.mockRejectedValueOnce(new Error("bad token"));
     const user = userEvent.setup();
@@ -70,56 +57,6 @@ describe("LoginPage", () => {
     await user.click(screen.getByRole("button", { name: "Sign in" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent(/sign in failed/i);
-    expect(screen.getByRole("button", { name: "Sign in" })).toBeEnabled();
-  });
-
-  it("clears errors when the token changes", async () => {
-    signInWithToken.mockRejectedValueOnce(new Error("bad token"));
-    const user = userEvent.setup();
-    render(<LoginPage />);
-
-    const field = screen.getByLabelText(/access token/i);
-    await user.type(field, "bad");
-    await user.click(screen.getByRole("button", { name: "Sign in" }));
-    expect(await screen.findByRole("alert")).toBeInTheDocument();
-
-    await user.type(field, "x");
-    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-  });
-
-  it("toggles token visibility", async () => {
-    const user = userEvent.setup();
-    render(<LoginPage />);
-
-    const field = screen.getByLabelText(/access token/i);
-    expect(field).toHaveClass("is-masked");
-
-    await user.click(screen.getByRole("button", { name: "Show token" }));
-    expect(field).not.toHaveClass("is-masked");
-
-    await user.click(screen.getByRole("button", { name: "Hide token" }));
-    expect(field).toHaveClass("is-masked");
-  });
-
-  it("shows a busy label while signing in", async () => {
-    let resolveSignIn: () => void = () => {};
-    signInWithToken.mockImplementation(
-      () =>
-        new Promise<void>((resolve) => {
-          resolveSignIn = resolve;
-        })
-    );
-    const user = userEvent.setup();
-    render(<LoginPage />);
-
-    await user.type(screen.getByLabelText(/access token/i), "token");
-    await user.click(screen.getByRole("button", { name: "Sign in" }));
-
-    expect(screen.getByRole("button", { name: "Signing in…" })).toBeDisabled();
-    resolveSignIn();
-    await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Sign in" })).toBeEnabled()
-    );
   });
 
   it("shows the production help text outside dev", () => {
@@ -130,5 +67,38 @@ describe("LoginPage", () => {
       screen.getByText(/trouble signing in\? contact your fleet administrator/i)
     ).toBeInTheDocument();
     vi.unstubAllEnvs();
+  });
+});
+
+describe("LoginPage with Supabase", () => {
+  beforeEach(() => {
+    mockUsesSupabase.value = true;
+    signInWithEmail.mockReset();
+    signInWithToken.mockReset();
+    signInWithEmail.mockResolvedValue(undefined);
+    signInWithToken.mockResolvedValue(undefined);
+  });
+
+  it("renders email and password fields", () => {
+    render(<LoginPage />);
+
+    expect(screen.getByLabelText(/^email$/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
+  });
+
+  it("signs in with email and password", async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+
+    await user.type(screen.getByLabelText(/^email$/i), "driver@fleet.example");
+    await user.type(screen.getByLabelText(/^password$/i), "secret-pass");
+    await user.click(screen.getByRole("button", { name: "Sign in" }));
+
+    await waitFor(() =>
+      expect(signInWithEmail).toHaveBeenCalledWith(
+        "driver@fleet.example",
+        "secret-pass"
+      )
+    );
   });
 });

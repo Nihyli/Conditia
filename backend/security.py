@@ -7,7 +7,6 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-import jwt
 from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +15,7 @@ from config import settings
 from database import get_db
 from domain import FleetRole
 from models.db_models import FleetMembership
+from services.jwt_verify import decode_access_token_subject
 
 logger = logging.getLogger(__name__)
 
@@ -47,33 +47,18 @@ def _normalize_fleet_id(raw: str | None) -> str | None:
 
 
 def _decode_bearer_token(token: str) -> str:
-    if settings.jwt_secret is None:
+    if settings.jwt_secret is None and not settings.supabase_url:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="JWT auth is not configured",
         )
-    decode_kwargs: dict[str, Any] = {
-        "algorithms": ["HS256"],
-        "audience": "authenticated",
-        "options": {"require": ["sub", "exp"]},
-    }
-    if settings.jwt_issuer:
-        decode_kwargs["issuer"] = settings.jwt_issuer
     try:
-        payload = jwt.decode(token, settings.jwt_secret, **decode_kwargs)
-    except jwt.PyJWTError:
-        logger.info("auth.jwt_rejected", extra={"reason": "invalid_or_expired"})
+        return decode_access_token_subject(token)
+    except ValueError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired session",
         ) from None
-    subject = payload.get("sub")
-    if not isinstance(subject, str) or not subject:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired session",
-        )
-    return subject
 
 
 async def _select_membership(

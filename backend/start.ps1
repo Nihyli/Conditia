@@ -170,4 +170,5 @@ Write-Host "Starting Conditia API on http://127.0.0.1:8001"
 Write-Host "Health: Invoke-RestMethod http://127.0.0.1:8001/health"
 Write-Host ""
 
+$env:MIGRATIONS_RUN = "1"
 python -m uvicorn main:app --reload --host 127.0.0.1 --port 8001

@@ -115,6 +115,7 @@ class ReportOut(BaseModel):
     critical_findings: int
     pdf_path: str | None
     raw_json: dict | None
+    findings_changed: bool = False
 
 
 class InspectionOut(BaseModel):

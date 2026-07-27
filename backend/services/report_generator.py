@@ -22,7 +22,7 @@ async def generate(
     findings = result.scalars().all()
 
     total = len(findings)
-    critical = sum(1 for f in findings if f.severity in ("critical", "high"))
+    critical = sum(1 for f in findings if f.severity == "critical")
 
     if requires_human_review and total == 0:
         summary = (

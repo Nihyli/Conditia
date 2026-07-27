@@ -90,15 +90,11 @@ export function FleetMembersPanel({
       </div>
 
       {error ? (
-        <p className="error-note" style={{ padding: "0 var(--space-20)" }}>
-          {error}
-        </p>
+        <p className="error-note">{error}</p>
       ) : null}
 
       {loading ? (
-        <p className="muted" style={{ padding: "0 var(--space-20) var(--space-16)" }}>
-          Loading members…
-        </p>
+        <p className="muted">Loading members…</p>
       ) : members.length === 0 ? (
         <div className="empty">
           <div className="empty__title">No members yet</div>
@@ -156,11 +152,7 @@ export function FleetMembersPanel({
       )}
 
       {canManage ? (
-        <form
-          className="filter-row"
-          style={{ padding: "var(--space-16) var(--space-20)" }}
-          onSubmit={(e) => void handleAdd(e)}
-        >
+        <form className="filter-row" onSubmit={(e) => void handleAdd(e)}>
           <label className="form-field">
             <span>User ID</span>
             <input
@@ -196,9 +188,7 @@ export function FleetMembersPanel({
           </button>
         </form>
       ) : (
-        <p className="muted" style={{ padding: "0 var(--space-20) var(--space-16)" }}>
-          Only fleet admins can add or edit members.
-        </p>
+        <p className="muted">Only fleet admins can add or edit members.</p>
       )}
     </section>
   );

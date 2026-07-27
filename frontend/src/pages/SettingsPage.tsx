@@ -73,7 +73,7 @@ export function SettingsPage() {
           </div>
         </dl>
         {authMode === "disabled" ? (
-          <p className="muted" style={{ padding: "0 var(--space-20) var(--space-16)" }}>
+          <p className="muted">
             Authentication is disabled for local development, so every request
             runs with full access. Set <code>AUTH_MODE=jwt</code> in{" "}
             <code>backend/.env</code> to test real sign-in, roles, and fleet

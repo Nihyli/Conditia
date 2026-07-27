@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import Markdown from "react-markdown";
 import { getReport } from "../api";
 import { PageAlert } from "../components/PageAlert";
 import { formatCapturedAt } from "../formatTime";
@@ -46,6 +47,7 @@ export function ReportDetailPage() {
 
   const { capturedAtLabel } = formatCapturedAt(report.generated_at);
   const findings = report.raw_json?.findings ?? [];
+  const narrativeMarkdown = report.raw_json?.narrative_markdown;
 
   return (
     <section className="panel report-print">
@@ -86,34 +88,43 @@ export function ReportDetailPage() {
         ) : null}
       </div>
 
+      {narrativeMarkdown ? (
+        <div className="report-narrative">
+          <Markdown>{narrativeMarkdown}</Markdown>
+        </div>
+      ) : null}
+
       {findings.length === 0 ? (
         <div className="empty">
           <div className="empty__title">No findings recorded</div>
         </div>
       ) : (
-        <div className="findings">
-          {findings.map((f) => {
-            const sev = parseSeverity(f.severity);
-            return (
-              <article className="finding" key={f.id}>
-                <div className="finding__body">
-                  <div className="finding__top">
-                    <span className={`sev ${severityClass[sev]}`}>
-                      <span className="sev__dot" />
-                      {severityLabel[sev]}
-                    </span>
-                    <span className="finding__title">{f.title ?? f.type}</span>
+        <>
+          <div className="report-section-label">Findings</div>
+          <div className="findings">
+            {findings.map((f) => {
+              const sev = parseSeverity(f.severity);
+              return (
+                <article className="finding" key={f.id}>
+                  <div className="finding__body">
+                    <div className="finding__top">
+                      <span className={`sev ${severityClass[sev]}`}>
+                        <span className="sev__dot" />
+                        {severityLabel[sev]}
+                      </span>
+                      <span className="finding__title">{f.title ?? f.type}</span>
+                    </div>
+                    <div className="finding__desc">
+                      {f.location ?? f.zone ?? "Unknown location"} ·{" "}
+                      <span className="mono">{Math.round(f.confidence * 100)}%</span>{" "}
+                      confidence · {f.status}
+                    </div>
                   </div>
-                  <div className="finding__desc">
-                    {f.location ?? f.zone ?? "Unknown location"} ·{" "}
-                    <span className="mono">{Math.round(f.confidence * 100)}%</span>{" "}
-                    confidence · {f.status}
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
+                </article>
+              );
+            })}
+          </div>
+        </>
       )}
     </section>
   );

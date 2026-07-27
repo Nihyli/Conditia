@@ -24,6 +24,9 @@ async def test_review_required_report_never_claims_clear() -> None:
 
         assert "No clear result" in report.summary
         assert report.raw_json["requires_human_review"] is True
+        md = report.raw_json["narrative_markdown"]
+        assert "Manual review required" in md
+        assert "No findings were detected" in md
 
 
 @pytest.mark.asyncio
@@ -73,3 +76,10 @@ async def test_report_summarizes_findings_and_upserts() -> None:
     assert reviewed.critical_findings == 1
     assert "Manual review is required" in reviewed.summary
     assert len(reports) == 1
+    md = reviewed.raw_json["narrative_markdown"]
+    assert "**2** findings detected" in md
+    assert "### Critical (1)" in md
+    assert "Dent" in md
+    assert "### Low (1)" in md
+    assert "Scratch" in md
+    assert "Recommended Next Steps" in md

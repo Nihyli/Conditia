@@ -115,6 +115,7 @@ export interface ApiReport {
     total_findings: number;
     critical_findings: number;
     requires_human_review?: boolean;
+    narrative_markdown?: string;
     findings: Array<{
       id: string;
       title: string | null;

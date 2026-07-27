@@ -103,3 +103,32 @@ def test_legacy_sqlite_uuid_migration_preserves_relationships(tmp_path: Path) ->
     assert media_row == (media_id.replace("-", ""), inspection_id.replace("-", ""))
     assert violations == []
     assert version == ("0008_security_hardening",)
+
+
+def test_fresh_sqlite_upgrade_head_from_base(tmp_path: Path) -> None:
+    """Upgrade from an empty database (no stamp) reaches head on SQLite.
+
+    Reproduced CONFIG-001: ``op.drop_constraint`` outside batch mode crashes
+    at migration 0008 when a prior migration created the constraint on SQLite.
+    """
+    database_path = tmp_path / "fresh.db"
+    backend_dir = Path(__file__).parents[1]
+    environment = {
+        **os.environ,
+        "DATABASE_URL": f"sqlite+aiosqlite:///{database_path.as_posix()}",
+    }
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, "-m", "alembic", "upgrade", "head"],
+        cwd=backend_dir,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+
+    with closing(sqlite3.connect(database_path)) as connection:
+        version = connection.execute(
+            "SELECT version_num FROM alembic_version"
+        ).fetchone()
+    assert version == ("0008_security_hardening",)

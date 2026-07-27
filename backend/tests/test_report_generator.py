@@ -41,7 +41,7 @@ async def test_report_summarizes_findings_and_upserts() -> None:
                     inspection_id=inspection.id,
                     title="Dent",
                     finding_type="dent",
-                    severity="high",
+                    severity="critical",
                     confidence=0.9,
                     status="open",
                 ),

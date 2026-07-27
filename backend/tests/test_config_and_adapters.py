@@ -68,6 +68,7 @@ def test_settings_reject_invalid_limits(overrides, message) -> None:
         ({"api_fleet_id": None}, "API_FLEET_ID"),
         ({"auth_mode": "jwt", "jwt_secret": None}, "JWT_SECRET"),
         ({"cors_origins": "http://localhost:5173"}, "deployed origins"),
+        ({"database_ssl_ca": "/missing/ca.crt"}, "not found"),
         ({"rate_limit_per_minute": 0}, "RATE_LIMIT_PER_MINUTE"),
         (
             {

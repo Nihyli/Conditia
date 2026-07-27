@@ -35,6 +35,7 @@ from services.vision import (
     _classify_damage_type,
     _provisional_severity,
     detect_damage,
+    reset_vision_client,
 )
 
 
@@ -55,6 +56,7 @@ async def test_detector_unavailable_is_explicit(monkeypatch, tmp_path: Path) -> 
 
 
 def install_fake_vision(monkeypatch, response) -> None:
+    reset_vision_client()
     vision = ModuleType("google.cloud.vision")
 
     class Image:

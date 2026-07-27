@@ -52,7 +52,7 @@ async def test_summary_assembles_history_findings_media_and_truck_label() -> Non
                     media_id=media.id,
                     title="Old dent",
                     finding_type="dent",
-                    severity="high",
+                    severity="critical",
                     confidence=0.9,
                     status="open",
                     zone="front",
